@@ -683,6 +683,8 @@ def build-prompt [
 - task_status\(id, status\) - Update task \(use IDs from list above\)
 - task_list\(\) - Refresh task list
 - session_complete\(\) - Call when ALL tasks done
+- note_add\(content, type\) - Record learning/tip/blocker/decision for future iterations
+- note_list\(type?\) - View session notes
 
 ## Instructions
 1. Make sure ALL tasks from the spec appear in the task list. If some are missing add them.
