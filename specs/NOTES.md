@@ -8,6 +8,13 @@
   - Validated --name is required with proper error handling
   - Tested basic invocation
 
+- Task 2: Implement xs store management (all subtasks)
+  - Created `start-store` function with mkdir -p and job spawn xs serve
+  - Implemented wait/poll loop using xs version to verify store is ready (30 attempts @ 100ms)
+  - Function accepts store_path parameter and creates/starts store
+  - Tested successfully: store starts, accepts appends, and can be queried
+  - Note: Function doesn't need to return store path (it's passed in as parameter)
+
 ## In Progress
 (none)
 
@@ -15,10 +22,6 @@
 (none)
 
 ## Remaining
-- Task 2: Implement xs store management
-  - Create `start-store` function: mkdir -p, job spawn xs serve
-  - Return store path for $env.XS_ADDR
-  - Add wait/poll loop until store responds (xs version)
 - Task 3: Implement opencode web management
   - Create `start-web` function: job spawn opencode web --port
   - Add wait/poll loop until web responds (curl localhost:port)
