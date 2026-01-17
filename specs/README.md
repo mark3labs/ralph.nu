@@ -1,0 +1,6 @@
+# Specs
+
+| Spec | Status | Description |
+|------|--------|-------------|
+| [ralph.md](ralph.md) | Complete | Core iterative AI assistant with xs store and opencode web |
+| [ngrok-tunnel.md](ngrok-tunnel.md) | Complete | Optional ngrok tunneling with basic auth |
