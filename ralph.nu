@@ -113,4 +113,33 @@ def main [
   print $"Session: ($name)"
   print $"Store: ($store)"
   print $"Port: ($port)"
+  
+  # Helper to cleanup all jobs
+  def cleanup-all [] {
+    let jobs = (job list | get id)
+    if ($jobs | is-not-empty) {
+      cleanup $jobs
+    }
+  }
+  
+  # Run main logic with cleanup handling
+  try {
+    # Start xs store
+    let store_job_id = (start-store $store)
+    
+    # Start opencode web
+    let web_result = (start-web $port)
+    print $"Web UI: ($web_result.url)"
+    
+    # TODO: Implement iteration loop here (Task 7)
+    print "\nIteration loop not yet implemented (Task 7)"
+    
+  } catch { |err|
+    print $"\nError occurred: ($err.msg)"
+    cleanup-all
+    error make {msg: $err.msg}
+  }
+  
+  # Normal cleanup on success or Ctrl+C
+  cleanup-all
 }

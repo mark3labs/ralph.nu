@@ -32,6 +32,16 @@
   - Tested successfully: events are logged correctly with proper metadata structure
   - Fixed spec file: updated all `from json -l` to `from json --objects` (correct Nushell flag)
 
+- Task 4: Implement cleanup handler (all subtasks)
+  - Cleanup function already existed from previous work
+  - Wired cleanup into main function with try/catch for interrupt/error handling
+  - Implemented cleanup-all helper that gets current job list for cleanup
+  - Cleanup is called on both normal completion and error paths
+  - Created test-ralph-cleanup.nu to verify cleanup functionality
+  - Tested successfully: cleanup kills all spawned jobs (xs store + opencode web)
+  - Tested error path: cleanup properly handles errors during startup (invalid port)
+  - All existing tests still pass (test-ralph-web.nu, test-ralph-logging.nu)
+
 ## In Progress
 (none)
 
@@ -39,10 +49,6 @@
 (none)
 
 ## Remaining
-- Task 5: Implement iteration logging
-  - Create `log-iteration-start` function: xs append ralph.iteration
-  - Create `log-iteration-complete` function: xs append ralph.iteration
-  - Include iteration number and timestamp in meta
 - Task 6: Build prompt template
   - Create prompt string with {spec}, {store}, {pid} placeholders
   - Include xs CLI examples for note CRUD
