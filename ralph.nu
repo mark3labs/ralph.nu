@@ -521,6 +521,32 @@ const STORE_PATH = "' + $abs_store + '"
 const SESSION_NAME = "' + $name + '"
 const TOPIC = `ralph.${SESSION_NAME}.task`
 
+// Check if xs store is healthy
+async function checkStoreHealth(): Promise<boolean> {
+  try {
+    const result = await Bun.$`xs version ${STORE_PATH}`.text()
+    return result.includes("version")
+  } catch {
+    return false
+  }
+}
+
+// Retry helper with exponential backoff
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let lastError: Error | null = null
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn()
+    } catch (e) {
+      lastError = e as Error
+      if (i < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 100 * Math.pow(2, i)))
+      }
+    }
+  }
+  throw lastError
+}
+
 // Get current iteration from store (latest iteration start frame)
 async function getCurrentIteration(): Promise<number> {
   const cmd = `xs cat ${STORE_PATH} | from json --objects | where topic == "ralph.${SESSION_NAME}.iteration" | where {|f| $f.meta.action? == "start"} | last | get meta.n`
@@ -539,9 +565,15 @@ export const task_add = tool({
     status: tool.schema.enum(["remaining", "blocked"]).default("remaining").describe("Initial status"),
   },
   async execute(args) {
-    const meta = JSON.stringify({ action: "add", status: args.status })
-    const result = await Bun.$`echo ${args.content} | xs append ${STORE_PATH} ${TOPIC} --meta ${meta}`.text()
-    return result.trim()
+    try {
+      const meta = JSON.stringify({ action: "add", status: args.status })
+      const result = await withRetry(async () => {
+        return await Bun.$`echo ${args.content} | xs append ${STORE_PATH} ${TOPIC} --meta ${meta}`.text()
+      })
+      return result.trim()
+    } catch (e) {
+      return `ERROR: Failed to add task: ${(e as Error).message}`
+    }
   },
 })
 
@@ -552,10 +584,16 @@ export const task_status = tool({
     status: tool.schema.enum(["in_progress", "completed", "blocked"]).describe("New status"),
   },
   async execute(args) {
-    const iteration = await getCurrentIteration()
-    const meta = JSON.stringify({ action: "status", id: args.id, status: args.status, iteration })
-    const result = await Bun.$`xs append ${STORE_PATH} ${TOPIC} --meta ${meta}`.text()
-    return `Task ${args.id} marked as ${args.status}`
+    try {
+      const iteration = await getCurrentIteration()
+      const meta = JSON.stringify({ action: "status", id: args.id, status: args.status, iteration })
+      await withRetry(async () => {
+        await Bun.$`xs append ${STORE_PATH} ${TOPIC} --meta ${meta}`.text()
+      })
+      return `Task ${args.id} marked as ${args.status}`
+    } catch (e) {
+      return `ERROR: Failed to update task status: ${(e as Error).message}`
+    }
   },
 })
 
@@ -628,10 +666,23 @@ export const session_complete = tool({
     session_name: tool.schema.string().describe("Session name (from Context section of prompt)"),
   },
   async execute(args) {
+    // Health check first
+    const healthy = await checkStoreHealth()
+    if (!healthy) {
+      return "ERROR: xs store not responding. The ralph session may need to be restarted."
+    }
+    
     const iteration = await getCurrentIteration()
     const meta = JSON.stringify({ action: "session_complete", iteration })
-    await Bun.$`echo "complete" | xs append ${STORE_PATH} ralph.${args.session_name}.control --meta ${meta}`.text()
-    return "Session marked complete - will exit after this iteration"
+    
+    try {
+      await withRetry(async () => {
+        await Bun.$`echo "complete" | xs append ${STORE_PATH} ralph.${args.session_name}.control --meta ${meta}`.text()
+      })
+      return `Session marked complete (iteration ${iteration}) - will exit after this iteration`
+    } catch (e) {
+      return `ERROR: Failed to signal session complete after 3 retries: ${(e as Error).message}`
+    }
   },
 })
 
@@ -642,11 +693,17 @@ export const note_add = tool({
     type: tool.schema.enum(["learning", "stuck", "tip", "decision"]).describe("Note category"),
   },
   async execute(args) {
-    const iteration = await getCurrentIteration()
-    const meta = JSON.stringify({ action: "add", type: args.type, iteration })
-    await Bun.$`echo ${args.content} | xs append ${STORE_PATH} ralph.${SESSION_NAME}.note --meta ${meta}`
-    const preview = args.content.length > 50 ? args.content.slice(0, 50) + "..." : args.content
-    return `Note added: [${args.type}] ${preview}`
+    try {
+      const iteration = await getCurrentIteration()
+      const meta = JSON.stringify({ action: "add", type: args.type, iteration })
+      await withRetry(async () => {
+        await Bun.$`echo ${args.content} | xs append ${STORE_PATH} ralph.${SESSION_NAME}.note --meta ${meta}`
+      })
+      const preview = args.content.length > 50 ? args.content.slice(0, 50) + "..." : args.content
+      return `Note added: [${args.type}] ${preview}`
+    } catch (e) {
+      return `ERROR: Failed to add note: ${(e as Error).message}`
+    }
   },
 })
 
