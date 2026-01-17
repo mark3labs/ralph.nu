@@ -618,7 +618,7 @@ export const session_complete = tool({
   },
   async execute(args) {
     const meta = JSON.stringify({ action: "session_complete", iteration: ITERATION })
-    await Bun.$`xs append ${STORE_PATH} ralph.${args.session_name}.control --meta ${meta}`.text()
+    await Bun.$`echo "complete" | xs append ${STORE_PATH} ralph.${args.session_name}.control --meta ${meta}`.text()
     return "Session marked complete - will exit after this iteration"
   },
 })
@@ -852,12 +852,16 @@ def main [
       }
       
       # Check for graceful shutdown signal (session_complete called by agent)
-      let shutdown = (xs cat $store 
+      # Match on current iteration to avoid triggering on stale frames from previous runs
+      let control_frames = (xs cat $store 
         | from json --objects 
         | where topic == $"ralph.($name).control"
-        | where {|f| $f.meta.action? == "session_complete" }
-        | where {|f| $f.id > $session_start_id }
-        | is-not-empty)
+        | where {|f| $f.meta.action? == "session_complete" })
+      print $"(style dim)DEBUG: Found ($control_frames | length) session_complete frames(style reset)"
+      $control_frames | each {|f| print $"(style dim)  - id: ($f.id), iteration: ($f.meta.iteration? | default 'none')(style reset)"}
+      print $"(style dim)DEBUG: Current iteration n=($n)(style reset)"
+      let shutdown = ($control_frames | where {|f| ($f.meta.iteration? | default 0) == $n } | is-not-empty)
+      print $"(style dim)DEBUG: shutdown=($shutdown)(style reset)"
       if $shutdown {
         print-ok "Session complete - all tasks done"
         break
