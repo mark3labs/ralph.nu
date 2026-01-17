@@ -665,9 +665,15 @@ def build-prompt [
 ] {
   let state_text = (format-task-state $task_state)
   
+  # Get notes and format for prompt
+  let notes = (get-note-state $store_path $name)
+  let notes_section = (format-notes-for-prompt $notes $iteration)
+  
   let template = $"## Context
 - Spec: ($spec_content)
 - Iteration: #($iteration)
+
+($notes_section)
 
 ## Current Task State
 ($state_text)
