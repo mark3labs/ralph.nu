@@ -2,7 +2,7 @@
 
 # Test script for ralph.nu iteration logging functions
 
-source ralph.nu
+source ../ralph.nu
 
 print "Testing iteration logging functions..."
 

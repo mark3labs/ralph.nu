@@ -33,12 +33,12 @@ print "✓ Default template test setup complete\n"
 print "Test 4: Verify main signature accepts optional input parameter"
 
 # Check that ralph.nu has the correct signature
-let has_input_param = (open ralph.nu | str contains "input?: string")
+let has_input_param = (open ../ralph.nu | str contains "input?: string")
 assert $has_input_param
 print "✓ Signature includes optional input parameter"
 
 # Check input is handled with priority logic
-let has_priority_logic = (open ralph.nu | str contains "# Determine base prompt")
+let has_priority_logic = (open ../ralph.nu | str contains "# Determine base prompt")
 assert $has_priority_logic
 print "✓ Prompt priority logic exists (--prompt > piped > default)\n"
 

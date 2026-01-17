@@ -16,7 +16,7 @@ rm -rf /tmp/test-task7-store
 
 print "\n1. Testing iteration loop with limit of 2 iterations..."
 let result = (
-  timeout 15s nu ralph.nu --name "task7-test" --spec $test_spec --prompt $test_prompt --iterations 2 --port 4099 --store "/tmp/test-task7-store"
+  timeout 15s nu ../ralph.nu --name "task7-test" --spec $test_spec --prompt $test_prompt --iterations 2 --port 4099 --store "/tmp/test-task7-store"
   | complete
 )
 

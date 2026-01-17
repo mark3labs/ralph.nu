@@ -2,7 +2,7 @@
 
 # Test the build-prompt function
 
-source ralph.nu
+source ../ralph.nu
 
 print "Testing build-prompt function..."
 

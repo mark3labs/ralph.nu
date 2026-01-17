@@ -3,7 +3,7 @@
 # Test script for ralph.nu cleanup handler
 # This test verifies that cleanup properly kills all spawned jobs
 
-source ralph.nu
+source ../ralph.nu
 
 print "Testing cleanup handler..."
 

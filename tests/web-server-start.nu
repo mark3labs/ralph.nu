@@ -4,7 +4,7 @@
 # This test verifies that start-web can start opencode web and poll it successfully
 
 # Source ralph.nu to get the actual start-web function
-source ralph.nu
+source ../ralph.nu
 
 print "Testing start-web function..."
 

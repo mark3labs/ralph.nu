@@ -1,10 +1,18 @@
 # Ralph.nu Implementation Notes
 
-## URGENT!!!
-- Move all tests to tests/
-- Makre sure all tests have meaningful names
-
 ## Completed
+- URGENT: Reorganize tests
+  - Created tests/ directory
+  - Moved all test files from root to tests/
+  - Renamed tests with meaningful names:
+    - test-ralph-web.nu → web-server-start.nu
+    - test-ralph-logging.nu → iteration-logging.nu
+    - test-ralph-cleanup.nu → job-cleanup.nu
+    - test-ralph-prompt.nu → prompt-template.nu
+    - test-task7.nu → iteration-loop.nu
+    - test-task8.nu → input-handling.nu
+  - Updated all source paths to ../ralph.nu
+  - All tests pass
 - Task 1: Create basic script skeleton (all subtasks)
   - Created ralph.nu with shebang and main function signature
   - Added all CLI flags: --name (required), --prompt, --spec, --model, --iterations, --port, --store
