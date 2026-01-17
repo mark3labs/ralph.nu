@@ -421,7 +421,6 @@ def generate-tools [
   store_path: string  # Path to the store directory
   name: string        # Session name
   iteration: int      # Current iteration number
-  pid: int            # Parent process ID for termination
 ] {
   let abs_store = ($store_path | path expand)
   
@@ -435,7 +434,6 @@ def generate-tools [
 const STORE_PATH = "' + $abs_store + '"
 const SESSION_NAME = "' + $name + '"
 const ITERATION = ' + ($iteration | into string) + '
-const PARENT_PID = ' + ($pid | into string) + '
 const TOPIC = `ralph.${SESSION_NAME}.task`
 
 export const task_add = tool({
@@ -531,8 +529,9 @@ export const session_complete = tool({
   description: "Signal that ALL tasks are complete and terminate the ralph session. Only call when every task is done.",
   args: {},
   async execute() {
-    await Bun.$`kill -TERM ${PARENT_PID}`
-    return "Session terminated"
+    const meta = JSON.stringify({ action: "session_complete", iteration: ITERATION })
+    await Bun.$`xs append ${STORE_PATH} ralph.${SESSION_NAME}.control --meta ${meta}`
+    return "Session marked complete - will exit after this iteration"
   },
 })
 '
@@ -546,7 +545,6 @@ def build-prompt [
   spec_content: string  # Content of the spec file
   store_path: string    # Path to the store directory
   name: string          # Session name
-  pid: int              # Parent process ID for termination
   iteration: int        # Current iteration number
   task_state: record    # Current task state from get-task-state
 ] {
@@ -648,9 +646,6 @@ def main [
     print-kv "Spec" $spec
     let spec_content = (open $spec)
     
-    # Get parent PID for termination instruction
-    let parent_pid = $nu.pid
-    
     # Determine base prompt (priority: --prompt > piped input > default template)
     let base_prompt = if ($prompt | is-not-empty) {
       $prompt
@@ -671,6 +666,11 @@ def main [
       print-status $"Continuing from iteration #($last_iter)"
     }
     
+    # Capture session start ID for shutdown signal filtering
+    let session_start_id = try {
+      xs cat $store --last 1 | from json | get id
+    } catch { "0" }
+    
     # Main iteration loop
     mut n = $last_iter + 1
     loop {
@@ -679,13 +679,13 @@ def main [
       print $"(style header)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━(style reset)\n"
       
       # Generate custom tools for this iteration
-      generate-tools $store $name $n $parent_pid
+      generate-tools $store $name $n
       
       # Get current task state for this iteration
       let task_state = (get-task-state $store $name)
       
       # Build prompt for this iteration
-      let iteration_prompt = (build-prompt $spec_content $store $name $parent_pid $n $task_state)
+      let iteration_prompt = (build-prompt $spec_content $store $name $n $task_state)
       
       # Use base_prompt if set, otherwise use built template
       let final_prompt = if ($base_prompt | is-not-empty) { $base_prompt } else { $iteration_prompt }
@@ -706,6 +706,18 @@ def main [
         print-ok $"Iteration #($n) complete"
       } else {
         print-err $"Iteration #($n) failed"
+      }
+      
+      # Check for graceful shutdown signal (session_complete called by agent)
+      let shutdown = (xs cat $store 
+        | from json --objects 
+        | where topic == $"ralph.($name).control"
+        | where {|f| $f.meta.action? == "session_complete" }
+        | where {|f| $f.id > $session_start_id }
+        | is-not-empty)
+      if $shutdown {
+        print-ok "Session complete - all tasks done"
+        break
       }
       
       # Increment counter
