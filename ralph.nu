@@ -231,13 +231,14 @@ def log-iteration-complete [
   echo "" | xs append $store_path $topic --meta $meta
 }
 
-# Compute current task state from append-only log
-# Returns record with tasks grouped by current type (latest type wins per task)
+# Compute current task state from append-only log using generate pattern
+# Events: add (creates task), status (changes task status by ID)
+# Returns record with tasks grouped by status
 def get-task-state [
   store_path: string  # Path to the store directory
   name: string        # Session name
 ] {
-  let topic = $"ralph.($name).note"
+  let topic = $"ralph.($name).task"
   
   # Get all frames from the topic
   let frames = (xs cat $store_path | from json --objects | where topic == $topic)
@@ -246,20 +247,43 @@ def get-task-state [
     return {completed: [], in_progress: [], blocked: [], remaining: []}
   }
   
-  # Extract all notes with content and preserve order (oldest first from xs cat)
-  let all_notes = ($frames | each {|frame|
-    {
-      type: $frame.meta.type
-      iteration: ($frame.meta.iteration? | default null)
-      content: (xs cas $store_path $frame.hash)
+  # Use generate to build state machine - tasks keyed by ID
+  let tasks = ($frames | generate {|frame, state = {}|
+    let action = ($frame.meta.action? | default "add")
+    
+    match $action {
+      "add" => {
+        # New task: store content and initial status
+        let content = (xs cas $store_path $frame.hash)
+        let status = ($frame.meta.status? | default "remaining")
+        let iteration = ($frame.meta.iteration? | default null)
+        $state | upsert $frame.id {
+          id: $frame.id
+          content: $content
+          status: $status
+          iteration: $iteration
+        } | {next: $in}
+      }
+      "status" => {
+        # Status change: update existing task by ID
+        let target_id = $frame.meta.id
+        let new_status = $frame.meta.status
+        let iteration = ($frame.meta.iteration? | default null)
+        if ($target_id in $state) {
+          $state | upsert $target_id {|task|
+            $task | get $target_id | upsert status $new_status | upsert iteration $iteration
+          } | {next: $in}
+        } else {
+          {next: $state}
+        }
+      }
+      _ => {next: $state}
     }
-  })
+  } | last | default {})
   
-  # Dedupe by content - latest type wins (reverse to process newest first, then reverse back)
-  let deduped = ($all_notes | reverse | uniq-by content | reverse)
-  
-  # Group by current type
-  let grouped = ($deduped | group-by type)
+  # Convert from {id: task} record to grouped lists by status
+  let task_list = ($tasks | values)
+  let grouped = if ($task_list | is-empty) { {} } else { $task_list | group-by status }
   
   # Return with all categories (empty lists for missing)
   {
@@ -270,7 +294,7 @@ def get-task-state [
   }
 }
 
-# Show notes using computed task state (deduped, latest type wins)
+# Show tasks using computed task state (ID-based, generate pattern)
 def show-notes [
   store_path: string  # Path to the store directory
   name: string        # Session name
@@ -297,7 +321,7 @@ def show-notes [
     remaining: ["white_dimmed", "○", "white_dimmed"]
   }
   
-  # Display notes by category
+  # Display tasks by category
   for category in ["in_progress", "blocked", "remaining", "completed"] {
     let tasks = ($state | get $category)
     if ($tasks | length) > 0 {
@@ -307,13 +331,14 @@ def show-notes [
       let item_style = ($style_info | get 2)
       
       print $"\n(ansi $header_style)($category | str upcase | str replace '_' ' ')(ansi reset)"
-      $tasks | each {|note|
-        let iter_label = if ($note.iteration != null) {
-          $"(style dim)[#($note.iteration)](style reset) "
+      $tasks | each {|task|
+        let iter_label = if ($task.iteration != null) {
+          $"(style dim)[#($task.iteration)](style reset) "
         } else {
           ""
         }
-        print $"  (ansi $item_style)($symbol)(ansi reset) ($iter_label)($note.content)"
+        let id_short = ($task.id | str substring 0..8)
+        print $"  (ansi $item_style)($symbol)(ansi reset) (style dim)[($id_short)](style reset) ($iter_label)($task.content)"
       }
     }
   }
@@ -355,28 +380,28 @@ def show-iterations [
   }
 }
 
-# Format task state as text for prompt injection
+# Format task state as text for prompt injection (includes IDs for reference)
 def format-task-state [state: record] {
   mut lines = []
   
   if ($state.in_progress | length) > 0 {
     $lines = ($lines | append "IN PROGRESS:")
     for task in $state.in_progress {
-      $lines = ($lines | append $"  - ($task.content)")
+      $lines = ($lines | append $"  - [($task.id)] ($task.content)")
     }
   }
   
   if ($state.blocked | length) > 0 {
     $lines = ($lines | append "BLOCKED:")
     for task in $state.blocked {
-      $lines = ($lines | append $"  - ($task.content)")
+      $lines = ($lines | append $"  - [($task.id)] ($task.content)")
     }
   }
   
   if ($state.remaining | length) > 0 {
     $lines = ($lines | append "REMAINING:")
     for task in $state.remaining {
-      $lines = ($lines | append $"  - ($task.content)")
+      $lines = ($lines | append $"  - [($task.id)] ($task.content)")
     }
   }
   
@@ -409,29 +434,27 @@ def build-prompt [
 ## Current Task State
 ($state_text)
 
-## State Commands \(xs CLI\)
-# Mark task completed
-echo \"Task description\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"completed\",\"iteration\":($iteration)}'
+## Task Commands \(xs CLI\)
+Topic: ralph.($name).task
 
-# Mark task in_progress
-echo \"Task description\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"in_progress\",\"iteration\":($iteration)}'
+# Add new task \(returns frame with ID\)
+echo \"Task description\" | xs append ($store_path) ralph.($name).task --meta '{\"action\":\"add\",\"status\":\"remaining\"}'
 
-# Mark task blocked
-echo \"Blocker description\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"blocked\",\"iteration\":($iteration)}'
-
-# Add new remaining task
-echo \"Task description\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"remaining\"}'
+# Change task status \(use ID from task list above\)
+xs append ($store_path) ralph.($name).task --meta '{\"action\":\"status\",\"id\":\"<TASK_ID>\",\"status\":\"in_progress\",\"iteration\":($iteration)}'
+xs append ($store_path) ralph.($name).task --meta '{\"action\":\"status\",\"id\":\"<TASK_ID>\",\"status\":\"completed\",\"iteration\":($iteration)}'
+xs append ($store_path) ralph.($name).task --meta '{\"action\":\"status\",\"id\":\"<TASK_ID>\",\"status\":\"blocked\",\"iteration\":($iteration)}'
 
 ## Instructions
-1. Pick ONE task from REMAINING or IN PROGRESS
-2. Mark it in_progress, complete the work
-3. Mark it completed \(use exact same task description\)
+1. Pick ONE task from REMAINING or IN PROGRESS \(note its ID\)
+2. Mark it in_progress by ID, complete the work
+3. Mark it completed by ID
 4. Git commit with clear message
 5. If ALL tasks done: pkill -P ($pid)
 
 ## Rules
 - ONE task per iteration
-- Task descriptions must match exactly when changing state
+- Use task IDs from the list above \(in square brackets\)
 - Run tests before commit
 "
   
