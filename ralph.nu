@@ -511,12 +511,14 @@ def generate-tools [
   mkdir .opencode/tool
   
   # Build TypeScript content
-  # STORE is constant (.ralph/store relative to project root)
+  # STORE uses absolute path resolved at tool load time
   # All tools take session_name as argument - agent gets it from prompt context
   let content = '
 import { tool } from "@opencode-ai/plugin"
+import { resolve, dirname } from "path"
 
-const STORE = ".ralph/store"
+// Resolve absolute path to store - tools run from .opencode/tool/ so we go up 2 levels
+const STORE = resolve(dirname(import.meta.path), "../../.ralph/store")
 
 // Retry helper with exponential backoff
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
@@ -606,52 +608,49 @@ export const task_list = tool({
       let frames = (xs cat ${STORE} | from json --objects | where topic == $topic)
       
       if ($frames | is-empty) {
-        echo "No tasks yet"
-        exit 0
-      }
-      
-      let tasks = ($frames | reduce -f {} {|frame, state|
-        let action = ($frame.meta.action? | default "add")
-        
-        if $action == "add" {
-          let content = (xs cas ${STORE} $frame.hash)
-          let status = ($frame.meta.status? | default "remaining")
-          let iteration = ($frame.meta.iteration? | default null)
-          $state | upsert $frame.id {
-            id: $frame.id
-            content: $content
-            status: $status
-            iteration: $iteration
-          }
-        } else if $action == "status" {
-          let target_id = $frame.meta.id
-          let new_status = $frame.meta.status
-          let iteration = ($frame.meta.iteration? | default null)
-          # Find task by exact match or prefix (8+ chars)
-          let matching_id = ($state | columns | where {|id| $id == $target_id or ($id | str starts-with $target_id)} | first | default null)
-          if ($matching_id | is-not-empty) {
-            $state | upsert $matching_id {|task|
-              $task | get $matching_id | upsert status $new_status | upsert iteration $iteration
+        "No tasks yet"
+      } else {
+        let tasks = ($frames | reduce -f {} {|frame, state|
+          let action = ($frame.meta.action? | default "add")
+          
+          if $action == "add" {
+            let content = (xs cas ${STORE} $frame.hash)
+            let status = ($frame.meta.status? | default "remaining")
+            let iteration = ($frame.meta.iteration? | default null)
+            $state | upsert $frame.id {
+              id: $frame.id
+              content: $content
+              status: $status
+              iteration: $iteration
+            }
+          } else if $action == "status" {
+            let target_id = $frame.meta.id
+            let new_status = $frame.meta.status
+            let iteration = ($frame.meta.iteration? | default null)
+            # Find task by exact match or prefix (8+ chars)
+            let matching_id = ($state | columns | where {|id| $id == $target_id or ($id | str starts-with $target_id)} | first | default null)
+            if ($matching_id | is-not-empty) {
+              $state | upsert $matching_id {|task|
+                $task | get $matching_id | upsert status $new_status | upsert iteration $iteration
+              }
+            } else {
+              $state
             }
           } else {
             $state
           }
-        } else {
-          $state
-        }
-      })
-      
-      let task_list = ($tasks | values)
-      let grouped = if ($task_list | is-empty) { {} } else { $task_list | group-by status }
-      
-      let result = {
-        completed: ($grouped | get -o completed | default [])
-        in_progress: ($grouped | get -o in_progress | default [])
-        blocked: ($grouped | get -o blocked | default [])
-        remaining: ($grouped | get -o remaining | default [])
+        })
+        
+        let task_list = ($tasks | values)
+        let grouped = if ($task_list | is-empty) { {} } else { $task_list | group-by status }
+        
+        {
+          completed: ($grouped | get -o completed | default [])
+          in_progress: ($grouped | get -o in_progress | default [])
+          blocked: ($grouped | get -o blocked | default [])
+          remaining: ($grouped | get -o remaining | default [])
+        } | to json
       }
-      
-      $result | to json
     `
     const result = await Bun.$`nu -c ${cmd}`.text()
     return result.trim() || "No tasks yet"
@@ -696,7 +695,7 @@ export const note_add = tool({
       const meta = JSON.stringify({ action: "add", type: args.type, iteration })
       const topic = `ralph.${session}.note`
       await withRetry(async () => {
-        await Bun.$`echo ${args.content} | xs append ${STORE} ${topic} --meta ${meta}`
+        await Bun.$`echo ${args.content} | xs append ${STORE} ${topic} --meta ${meta}`.text()
       })
       const preview = args.content.length > 50 ? args.content.slice(0, 50) + "..." : args.content
       return `Note added: [${args.type}] ${preview}`
