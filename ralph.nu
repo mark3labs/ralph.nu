@@ -2,6 +2,59 @@
 
 # ralph.nu - Iterative AI coding assistant with xs event store and opencode web UI
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Styling helpers - consistent colored output throughout the script
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Style definitions using ansi codes
+def "style reset" [] { ansi reset }
+def "style bold" [] { ansi attr_bold }
+def "style dim" [] { ansi grey }
+def "style header" [] { ansi cyan_bold }
+def "style success" [] { ansi green_bold }
+def "style error" [] { ansi red_bold }
+def "style warn" [] { ansi yellow }
+def "style info" [] { ansi blue }
+def "style url" [] { ansi cyan_underline }
+def "style label" [] { ansi white_dimmed }
+def "style value" [] { ansi white_bold }
+def "style section" [] { ansi magenta_bold }
+
+# Print a styled header banner
+def print-banner [] {
+  print $"(style header)╭─────────────────────────────────────╮(style reset)"
+  print $"(style header)│(style reset)         (style bold)ralph.nu(style reset)                    (style header)│(style reset)"
+  print $"(style header)│(style reset)   (style dim)iterative AI coding assistant(style reset)   (style header)│(style reset)"
+  print $"(style header)╰─────────────────────────────────────╯(style reset)"
+}
+
+# Print key-value info line
+def print-kv [key: string, value: string] {
+  print $"  (style label)($key):(style reset) (style value)($value)(style reset)"
+}
+
+# Print success message
+def print-ok [msg: string] {
+  print $"  (style success)✓(style reset) ($msg)"
+}
+
+# Print error message  
+def print-err [msg: string] {
+  print $"  (style error)✗(style reset) ($msg)"
+}
+
+# Print info/status message
+def print-status [msg: string] {
+  print $"  (style info)→(style reset) ($msg)"
+}
+
+# Print section header
+def print-section [title: string] {
+  print $"\n(style section)── ($title) ──(style reset)"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Kill any existing processes for this session
 def kill-existing [
   store_path: string  # Path to the store directory
@@ -12,7 +65,7 @@ def kill-existing [
   if $xs_pids.exit_code == 0 {
     let pids = ($xs_pids.stdout | str trim)
     if ($pids | is-not-empty) {
-      print $"Killing existing xs serve for ($store_path)..."
+      print-status $"Killing existing xs serve for (style value)($store_path)(style reset)..."
       pkill -f $"xs serve ($store_path)"
       sleep 100ms
     }
@@ -23,7 +76,7 @@ def kill-existing [
   if $web_pids.exit_code == 0 {
     let pids = ($web_pids.stdout | str trim)
     if ($pids | is-not-empty) {
-      print $"Killing existing opencode web on port ($port)..."
+      print-status $"Killing existing opencode web on port (style value)($port)(style reset)..."
       pkill -f $"opencode web --port ($port)"
       sleep 100ms
     }
@@ -34,7 +87,7 @@ def kill-existing [
   if $ngrok_pids.exit_code == 0 {
     let pids = ($ngrok_pids.stdout | str trim)
     if ($pids | is-not-empty) {
-      print $"Killing existing ngrok on port ($port)..."
+      print-status $"Killing existing ngrok on port (style value)($port)(style reset)..."
       pkill -f $"ngrok http ($port)"
       sleep 100ms
     }
@@ -48,7 +101,7 @@ def start-store [
   # Create store directory if it doesn't exist
   mkdir $store_path
   
-  print $"Starting xs store at ($store_path)..."
+  print-status $"Starting xs store at (style value)($store_path)(style reset)..."
   
   # Start xs serve as background job and capture job ID
   let job_id = (job spawn { xs serve $store_path })
@@ -57,7 +110,7 @@ def start-store [
   for attempt in 0..30 {
     let result = (xs version $store_path | complete)
     if $result.exit_code == 0 {
-      print "xs store is ready!"
+      print-ok "xs store is ready"
       return $job_id
     }
     sleep 100ms
@@ -71,7 +124,7 @@ def start-store [
 def start-web [
   port: int  # Port for the web server
 ] {
-  print $"Starting opencode web on port ($port)..."
+  print-status $"Starting opencode web on port (style value)($port)(style reset)..."
   
   # Start opencode web as background job and capture job ID
   let job_id = (job spawn { opencode web --port $port })
@@ -80,7 +133,7 @@ def start-web [
   for attempt in 0..30 {
     let result = (curl -s -o /dev/null -w "%{http_code}" $"http://localhost:($port)" | complete)
     if $result.exit_code == 0 and ($result.stdout | into int) < 500 {
-      print $"opencode web is ready at http://localhost:($port)"
+      print-ok $"opencode web ready at (style url)http://localhost:($port)(style reset)"
       return {job_id: $job_id, url: $"http://localhost:($port)"}
     }
     sleep 100ms
@@ -102,7 +155,7 @@ def start-ngrok [
     error make {msg: $"ngrok password must be 8-128 characters, got ($pw_len)"}
   }
   
-  print "Starting ngrok tunnel..."
+  print-status "Starting ngrok tunnel..."
   
   let auth = $"ralph:($password)"
   
@@ -120,8 +173,9 @@ def start-ngrok [
       let response = (http get http://localhost:4040/api/tunnels)
       if ($response.tunnels? | default [] | is-not-empty) {
         let url = $response.tunnels.0.public_url
-        let auth_hint = $"auth: ralph:($password)"
-        print $"Tunnel: ($url) \(($auth_hint)\)"
+        print-ok $"ngrok tunnel ready"
+        print $"     (style url)($url)(style reset)"
+        print $"     (style dim)auth: (style warn)ralph:($password)(style reset)"
         return {job_id: $job_id, url: $url}
       }
     } catch {
@@ -138,12 +192,12 @@ def start-ngrok [
 def cleanup [
   job_ids: list<int>  # List of job IDs to kill
 ] {
-  print "Cleaning up background jobs..."
+  print $"\n(style dim)Cleaning up background jobs...(style reset)"
   
   for job_id in $job_ids {
     try {
       job kill $job_id
-      print $"Killed job ($job_id)"
+      print $"  (style dim)killed job ($job_id)(style reset)"
     } catch {
       # Job may have already exited - ignore errors
     }
@@ -188,7 +242,6 @@ def show-notes [
   let frames = (xs cat $store_path | from json --objects | where topic == $topic)
   
   if ($frames | is-empty) {
-    print "No notes found."
     return
   }
   
@@ -202,16 +255,30 @@ def show-notes [
     }
   } | group-by type)
   
+  # Category display config: [header_color, item_symbol, item_color]
+  let category_styles = {
+    completed: ["green_bold", "✓", "green"]
+    in_progress: ["yellow_bold", "●", "yellow"]
+    blocked: ["red_bold", "✗", "red"]
+    remaining: ["white_dimmed", "○", "white_dimmed"]
+  }
+  
   # Display notes by category
   for category in ["completed", "in_progress", "blocked", "remaining"] {
     if ($category in ($notes | columns)) {
-      print $"\n($category | str upcase):"
+      let style_info = ($category_styles | get $category)
+      let header_style = ($style_info | get 0)
+      let symbol = ($style_info | get 1)
+      let item_style = ($style_info | get 2)
+      
+      print $"\n(ansi $header_style)($category | str upcase | str replace '_' ' ')(ansi reset)"
       $notes | get $category | each {|note|
-        if ($note.iteration | is-not-empty) {
-          print $"  [Iteration ($note.iteration)] ($note.content)"
+        let iter_label = if ($note.iteration | is-not-empty) {
+          $"(style dim)[#($note.iteration)](style reset) "
         } else {
-          print $"  ($note.content)"
+          ""
         }
+        print $"  (ansi $item_style)($symbol)(ansi reset) ($iter_label)($note.content)"
       }
     }
   }
@@ -228,7 +295,6 @@ def show-iterations [
   let frames = (xs cat $store_path | from json --objects | where topic == $topic)
   
   if ($frames | is-empty) {
-    print "No iterations found."
     return
   }
   
@@ -242,12 +308,14 @@ def show-iterations [
     }
   })
   
-  print "\nITERATION HISTORY:"
+  print $"\n(style section)HISTORY(style reset)"
   $events | each {|event|
     if $event.action == "start" {
-      print $"  Iteration #($event.iteration) started at ($event.timestamp)"
+      print $"  (style info)▶(style reset) (style dim)#($event.iteration)(style reset) started (style dim)($event.timestamp)(style reset)"
     } else if $event.action == "complete" {
-      print $"  Iteration #($event.iteration) completed ($event.status) at ($event.timestamp)"
+      let status_style = if $event.status == "success" { style success } else { style error }
+      let status_symbol = if $event.status == "success" { "✓" } else { "✗" }
+      print $"  ($status_style)($status_symbol)(style reset) (style dim)#($event.iteration)(style reset) ($event.status) (style dim)($event.timestamp)(style reset)"
     }
   }
 }
@@ -319,15 +387,17 @@ def main [
 ] {
   # Validate required parameter
   if ($name | is-empty) {
-    print "Error: --name (-n) is required"
-    print "Usage: ralph.nu --name <session-name> [--spec <path>] [--iterations <n>]"
+    print-err "Missing required parameter: --name (-n)"
+    print $"  (style dim)Usage: ralph.nu --name <session-name> [--spec <path>] [--iterations <n>](style reset)"
     exit 1
   }
 
-  print "ralph.nu starting..."
-  print $"Session: ($name)"
-  print $"Store: ($store)"
-  print $"Port: ($port)"
+  print-banner
+  print ""
+  print-kv "Session" $name
+  print-kv "Store" $store
+  print-kv "Port" ($port | into string)
+  print ""
   
   # Helper to cleanup all jobs
   def cleanup-all [ngrok_job?: int] {
@@ -365,6 +435,7 @@ def main [
     }
     
     # Read spec file
+    print-kv "Spec" $spec
     let spec_content = (open $spec)
     
     # Get parent PID for termination instruction
@@ -382,7 +453,9 @@ def main [
     # Main iteration loop
     mut n = 1
     loop {
-      print $"\n($name) - Iteration #($n)..."
+      print $"\n(style header)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━(style reset)"
+      print $"(style header)  ($name)(style reset) (style dim)·(style reset) (style value)Iteration #($n)(style reset)"
+      print $"(style header)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━(style reset)\n"
       
       # Build prompt for this iteration
       let iteration_prompt = (build-prompt $spec_content $store $name $parent_pid $n)
@@ -402,20 +475,24 @@ def main [
       # Log iteration complete
       log-iteration-complete $store $name $n $status
       
-      print "Done!"
+      if $status == "success" {
+        print-ok $"Iteration #($n) complete"
+      } else {
+        print-err $"Iteration #($n) failed"
+      }
       
       # Increment counter
       $n += 1
       
       # Check iteration limit (0 = infinite)
       if $iterations > 0 and $n > $iterations {
-        print $"\nCompleted ($iterations) iterations. Exiting."
+        print $"\n(style dim)Completed ($iterations) iterations. Exiting.(style reset)"
         break
       }
     }
     
   } catch { |err|
-    print $"\nError occurred: ($err.msg)"
+    print-err $"($err.msg)"
     cleanup-all
     error make {msg: $err.msg}
   }
