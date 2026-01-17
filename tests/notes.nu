@@ -88,4 +88,37 @@ def "test show-session-notes displays grouped by type" [] {
   teardown-test-store $test_store
 }
 
+def "test notes persist across ralph.nu restarts" [] {
+  let test_store = (setup-test-store)
+  
+  print "\nTesting note persistence across restarts..."
+  
+  # Simulate first run: add notes
+  print "1. First run: adding notes..."
+  echo "Cache everything possible" | xs append $test_store ralph.restart-test.note --meta '{"action":"add","type":"tip","iteration":1}'
+  echo "Hit memory limit at 1GB" | xs append $test_store ralph.restart-test.note --meta '{"action":"add","type":"stuck","iteration":1}'
+  
+  let notes_run1 = (get-note-state $test_store "restart-test")
+  print $"   First run: found ($notes_run1 | length) notes"
+  assert equal ($notes_run1 | length) 2
+  
+  # Simulate second run: read notes (as if ralph.nu restarted)
+  print "2. Second run: reading notes from store..."
+  let notes_run2 = (get-note-state $test_store "restart-test")
+  print $"   Second run: found ($notes_run2 | length) notes"
+  assert equal ($notes_run2 | length) 2
+  
+  # Verify content matches
+  let tip_notes = ($notes_run2 | where type == "tip")
+  let stuck_notes = ($notes_run2 | where type == "stuck")
+  assert equal ($tip_notes | length) 1
+  assert equal ($stuck_notes | length) 1
+  assert str contains ($tip_notes | first | get content) "Cache everything"
+  assert str contains ($stuck_notes | first | get content) "memory limit"
+  
+  print "✓ Notes persist across restarts and content matches"
+  
+  teardown-test-store $test_store
+}
+
 run-tests
