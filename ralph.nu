@@ -231,8 +231,9 @@ def log-iteration-complete [
   echo "" | xs append $store_path $topic --meta $meta
 }
 
-# Show notes aggregated by type from xs store
-def show-notes [
+# Compute current task state from append-only log
+# Returns record with tasks grouped by current type (latest type wins per task)
+def get-task-state [
   store_path: string  # Path to the store directory
   name: string        # Session name
 ] {
@@ -242,18 +243,51 @@ def show-notes [
   let frames = (xs cat $store_path | from json --objects | where topic == $topic)
   
   if ($frames | is-empty) {
-    return
+    return {completed: [], in_progress: [], blocked: [], remaining: []}
   }
   
-  # Extract content for each frame and group by type
-  let notes = ($frames | each {|frame|
-    let content = (xs cas $store_path $frame.hash)
+  # Extract all notes with content and preserve order (oldest first from xs cat)
+  let all_notes = ($frames | each {|frame|
     {
       type: $frame.meta.type
-      iteration: ($frame.meta.iteration? | default "")
-      content: $content
+      iteration: ($frame.meta.iteration? | default null)
+      content: (xs cas $store_path $frame.hash)
     }
-  } | group-by type)
+  })
+  
+  # Dedupe by content - latest type wins (reverse to process newest first, then reverse back)
+  let deduped = ($all_notes | reverse | uniq-by content | reverse)
+  
+  # Group by current type
+  let grouped = ($deduped | group-by type)
+  
+  # Return with all categories (empty lists for missing)
+  {
+    completed: ($grouped | get -o completed | default [])
+    in_progress: ($grouped | get -o in_progress | default [])
+    blocked: ($grouped | get -o blocked | default [])
+    remaining: ($grouped | get -o remaining | default [])
+  }
+}
+
+# Show notes using computed task state (deduped, latest type wins)
+def show-notes [
+  store_path: string  # Path to the store directory
+  name: string        # Session name
+] {
+  let state = (get-task-state $store_path $name)
+  
+  # Check if any tasks exist
+  let has_tasks = (
+    ($state.completed | length) > 0 or
+    ($state.in_progress | length) > 0 or
+    ($state.blocked | length) > 0 or
+    ($state.remaining | length) > 0
+  )
+  
+  if not $has_tasks {
+    return
+  }
   
   # Category display config: [header_color, item_symbol, item_color]
   let category_styles = {
@@ -264,16 +298,17 @@ def show-notes [
   }
   
   # Display notes by category
-  for category in ["completed", "in_progress", "blocked", "remaining"] {
-    if ($category in ($notes | columns)) {
+  for category in ["in_progress", "blocked", "remaining", "completed"] {
+    let tasks = ($state | get $category)
+    if ($tasks | length) > 0 {
       let style_info = ($category_styles | get $category)
       let header_style = ($style_info | get 0)
       let symbol = ($style_info | get 1)
       let item_style = ($style_info | get 2)
       
       print $"\n(ansi $header_style)($category | str upcase | str replace '_' ' ')(ansi reset)"
-      $notes | get $category | each {|note|
-        let iter_label = if ($note.iteration | is-not-empty) {
+      $tasks | each {|note|
+        let iter_label = if ($note.iteration != null) {
           $"(style dim)[#($note.iteration)](style reset) "
         } else {
           ""
@@ -320,53 +355,84 @@ def show-iterations [
   }
 }
 
-# Build prompt template with placeholders and xs CLI examples
+# Format task state as text for prompt injection
+def format-task-state [state: record] {
+  mut lines = []
+  
+  if ($state.in_progress | length) > 0 {
+    $lines = ($lines | append "IN PROGRESS:")
+    for task in $state.in_progress {
+      $lines = ($lines | append $"  - ($task.content)")
+    }
+  }
+  
+  if ($state.blocked | length) > 0 {
+    $lines = ($lines | append "BLOCKED:")
+    for task in $state.blocked {
+      $lines = ($lines | append $"  - ($task.content)")
+    }
+  }
+  
+  if ($state.remaining | length) > 0 {
+    $lines = ($lines | append "REMAINING:")
+    for task in $state.remaining {
+      $lines = ($lines | append $"  - ($task.content)")
+    }
+  }
+  
+  if ($state.completed | length) > 0 {
+    $lines = ($lines | append $"COMPLETED: ($state.completed | length) tasks")
+  }
+  
+  if ($lines | is-empty) {
+    "No tasks yet - check spec for initial tasks"
+  } else {
+    $lines | str join "\n"
+  }
+}
+
+# Build prompt template with task state injected
 def build-prompt [
   spec_content: string  # Content of the spec file
   store_path: string    # Path to the store directory
   name: string          # Session name
   pid: int              # Parent process ID for termination
   iteration: int        # Current iteration number
+  task_state: record    # Current task state from get-task-state
 ] {
+  let state_text = (format-task-state $task_state)
+  
   let template = $"## Context
 - Spec: ($spec_content)
-- Store: ($store_path) \(use xs CLI for state\)
-- Topic prefix: ralph.($name)
+- Iteration: #($iteration)
+
+## Current Task State
+($state_text)
 
 ## State Commands \(xs CLI\)
-# Read all notes with content
-xs cat ($store_path) | from json --objects | where topic == \"ralph.($name).note\" | each { |frame| 
-  {type: $frame.meta.type, content: \(xs cas ($store_path) $frame.hash\)} 
-}
-
-# Add completed note  
+# Mark task completed
 echo \"Task description\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"completed\",\"iteration\":($iteration)}'
 
-# Add in_progress note
-echo \"Current task\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"in_progress\",\"iteration\":($iteration)}'
+# Mark task in_progress
+echo \"Task description\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"in_progress\",\"iteration\":($iteration)}'
 
-# Add blocked note
+# Mark task blocked
 echo \"Blocker description\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"blocked\",\"iteration\":($iteration)}'
 
-# Add remaining note
+# Add new remaining task
 echo \"Task description\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"remaining\"}'
 
-# Clear in_progress \(mark complete or move to blocked before commit\)
-
 ## Instructions
-1. STUDY the spec file
-2. Query ralph.($name).note topic for current state
-3. Pick ONE pending task, complete it
-4. Append notes for your changes \(completed, blocked, remaining\)
-5. Ensure no in_progress notes remain before commit
-6. Git commit with clear message
-7. If ALL tasks done: pkill -P ($pid)
+1. Pick ONE task from REMAINING or IN PROGRESS
+2. Mark it in_progress, complete the work
+3. Mark it completed \(use exact same task description\)
+4. Git commit with clear message
+5. If ALL tasks done: pkill -P ($pid)
 
 ## Rules
 - ONE task per iteration
+- Task descriptions must match exactly when changing state
 - Run tests before commit
-- Document blockers in ralph.($name).note with type \"blocked\"
-- Keep remaining tasks updated with type \"remaining\"
 "
   
   return $template
@@ -452,10 +518,9 @@ def main [
     
     # Get last iteration from store to enable continuation
     let last_iter = try {
-      xs cat $store | from json --objects 
-        | where topic == $"ralph.($name).iteration" 
-        | get meta.n 
-        | math max
+      let frames = (xs cat $store | from json --objects 
+        | where topic == $"ralph.($name).iteration")
+      if ($frames | is-empty) { 0 } else { $frames | get meta.n | math max }
     } catch { 0 }
     
     if $last_iter > 0 {
@@ -469,8 +534,11 @@ def main [
       print $"(style header)  ($name)(style reset) (style dim)·(style reset) (style value)Iteration #($n)(style reset)"
       print $"(style header)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━(style reset)\n"
       
+      # Get current task state for this iteration
+      let task_state = (get-task-state $store $name)
+      
       # Build prompt for this iteration
-      let iteration_prompt = (build-prompt $spec_content $store $name $parent_pid $n)
+      let iteration_prompt = (build-prompt $spec_content $store $name $parent_pid $n $task_state)
       
       # Use base_prompt if set, otherwise use built template
       let final_prompt = if ($base_prompt | is-not-empty) { $base_prompt } else { $iteration_prompt }
