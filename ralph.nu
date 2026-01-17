@@ -23,8 +23,8 @@ def "style section" [] { ansi magenta_bold }
 # Print a styled header banner
 def print-banner [] {
   print $"(style header)╭─────────────────────────────────────╮(style reset)"
-  print $"(style header)│(style reset)         (style bold)ralph.nu(style reset)                    (style header)│(style reset)"
-  print $"(style header)│(style reset)   (style dim)AI agent in a while loop(style reset)       (style header)│(style reset)"
+  print $"(style header)│(style reset)              (style bold)ralph.nu(style reset)               (style header)│(style reset)"
+  print $"(style header)│(style reset)      (style dim)AI agent in a while loop(style reset)       (style header)│(style reset)"
   print $"(style header)╰─────────────────────────────────────╯(style reset)"
 }
 
@@ -214,7 +214,7 @@ def log-iteration-start [
   let timestamp = (date now | format date "%Y-%m-%dT%H:%M:%S%z")
   let meta = {action: "start", n: $iteration, timestamp: $timestamp} | to json -r
   
-  echo "" | xs append $store_path $topic --meta $meta
+  echo "" | xs append $store_path $topic --meta $meta | ignore
 }
 
 # Log iteration complete event to xs store
@@ -228,7 +228,7 @@ def log-iteration-complete [
   let timestamp = (date now | format date "%Y-%m-%dT%H:%M:%S%z")
   let meta = {action: "complete", n: $iteration, status: $status, timestamp: $timestamp} | to json -r
   
-  echo "" | xs append $store_path $topic --meta $meta
+  echo "" | xs append $store_path $topic --meta $meta | ignore
 }
 
 # Compute current task state from append-only log using reduce pattern
@@ -625,7 +625,6 @@ def main [
     
     # Start opencode web
     let web_result = (start-web $port)
-    print $"Web UI: ($web_result.url)"
     
     # Start ngrok tunnel if requested
     mut ngrok_job_id = null
@@ -668,7 +667,7 @@ def main [
     
     # Capture session start ID for shutdown signal filtering
     let session_start_id = try {
-      xs cat $store --last 1 | from json | get id
+      xs cat $store | from json --objects | last | get id
     } catch { "0" }
     
     # Main iteration loop
