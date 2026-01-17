@@ -32,13 +32,16 @@ print "✓ Default template test setup complete\n"
 # Test 4: Verify signature accepts piped input
 print "Test 4: Verify main signature accepts optional input parameter"
 
-# Check that ralph.nu has the correct signature
-let has_input_param = (open ../ralph.nu | str contains "input?: string")
+# Check that ralph.nu has the correct signature  
+let script_dir = ($env.FILE_PWD? | default $env.PWD)
+let ralph_path = ($script_dir | path join ".." "ralph.nu")
+let ralph_content = (^cat $ralph_path)
+let has_input_param = ($ralph_content | str contains "input?: string")
 assert $has_input_param
 print "✓ Signature includes optional input parameter"
 
 # Check input is handled with priority logic
-let has_priority_logic = (open ../ralph.nu | str contains "# Determine base prompt")
+let has_priority_logic = ($ralph_content | str contains "# Determine base prompt")
 assert $has_priority_logic
 print "✓ Prompt priority logic exists (--prompt > piped > default)\n"
 

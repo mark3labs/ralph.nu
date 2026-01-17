@@ -94,6 +94,81 @@ def log-iteration-complete [
   echo "" | xs append $store_path $topic --meta $meta
 }
 
+# Show notes aggregated by type from xs store
+def show-notes [
+  store_path: string  # Path to the store directory
+  name: string        # Session name
+] {
+  let topic = $"ralph.($name).note"
+  
+  # Get all frames from the topic
+  let frames = (xs cat $store_path | from json --objects | where topic == $topic)
+  
+  if ($frames | is-empty) {
+    print "No notes found."
+    return
+  }
+  
+  # Extract content for each frame and group by type
+  let notes = ($frames | each {|frame|
+    let content = (xs cas $store_path $frame.hash)
+    {
+      type: $frame.meta.type
+      iteration: ($frame.meta.iteration? | default "")
+      content: $content
+    }
+  } | group-by type)
+  
+  # Display notes by category
+  for category in ["completed", "in_progress", "blocked", "remaining"] {
+    if ($category in ($notes | columns)) {
+      print $"\n($category | str upcase):"
+      $notes | get $category | each {|note|
+        if ($note.iteration | is-not-empty) {
+          print $"  [Iteration ($note.iteration)] ($note.content)"
+        } else {
+          print $"  ($note.content)"
+        }
+      }
+    }
+  }
+}
+
+# Show iteration history from xs store
+def show-iterations [
+  store_path: string  # Path to the store directory
+  name: string        # Session name
+] {
+  let topic = $"ralph.($name).iteration"
+  
+  # Get all iteration events
+  let frames = (xs cat $store_path | from json --objects | where topic == $topic)
+  
+  if ($frames | is-empty) {
+    print "No iterations found."
+    return
+  }
+  
+  # Extract and display iteration events
+  let events = ($frames | each {|frame|
+    {
+      action: $frame.meta.action
+      iteration: $frame.meta.n
+      status: ($frame.meta.status? | default "")
+      timestamp: $frame.meta.timestamp
+    }
+  })
+  
+  print "\nITERATION HISTORY:"
+  $events | each {|event|
+    if $event.action == "start" {
+      print $"  Iteration #($event.iteration) started at ($event.timestamp)"
+    } else if $event.action == "complete" {
+      print $"  Iteration #($event.iteration) completed ($event.status) at ($event.timestamp)"
+    }
+  }
+}
+
 # Build prompt template with placeholders and xs CLI examples
 def build-prompt [
   spec_content: string  # Content of the spec file
@@ -149,7 +224,7 @@ echo \"Task description\" | xs append ($store_path) ralph.($name).note --meta '{
 # Main entry point
 def main [
   input?: string                                            # Optional piped input for prompt
-  --name (-n): string                                       # REQUIRED - name for this ralph session
+  --name (-n): string = ""                                  # REQUIRED - name for this ralph session
   --prompt (-p): string                                     # Custom prompt
   --spec (-s): string = "./specs/SPEC.md"                   # Spec file path
   --model (-m): string = "anthropic/claude-sonnet-4-5"      # Model to use
@@ -157,9 +232,9 @@ def main [
   --port: int = 4096                                        # opencode web port
   --store: string = "./.ralph/store"                        # xs store path
 ] {
-  # Validate required parameter
+  # Validate required parameter - return silently if empty (when sourced for testing)
   if ($name | is-empty) {
-    error make {msg: "--name (-n) is required"}
+    return
   }
 
   print "ralph.nu starting..."
@@ -183,6 +258,14 @@ def main [
     # Start opencode web
     let web_result = (start-web $port)
     print $"Web UI: ($web_result.url)"
+    
+    # Display current state (if any previous sessions exist)
+    try {
+      show-iterations $store $name
+      show-notes $store $name
+    } catch {
+      # Store may not have any data yet - this is fine for first run
+    }
     
     # Read spec file
     let spec_content = (open $spec)

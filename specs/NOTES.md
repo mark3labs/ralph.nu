@@ -99,6 +99,21 @@
   - All existing tests still pass (web, logging, cleanup, prompt, task7)
   - Main function now properly handles all three input methods
 
+- Task 9: Add status display helpers (all subtasks)
+  - Created `show-notes` function that aggregates ralph.note by type (lines 98-135)
+  - Created `show-iterations` function that lists ralph.iteration events (lines 137-170)
+  - Both functions called on startup to show current state (lines 263-268)
+  - Functions handle empty stores gracefully
+  - show-notes displays notes organized by category: COMPLETED, IN_PROGRESS, BLOCKED, REMAINING
+  - show-notes includes iteration numbers for completed/in_progress/blocked notes
+  - show-iterations displays iteration history with start/complete events and timestamps
+  - Created comprehensive test (tests/status-display.nu) that verifies:
+    - Empty store handling for both functions
+    - Display of populated notes across all categories
+    - Display of iteration events with proper formatting
+    - Correct data persistence in xs store (6 notes, 4 events)
+  - All tests pass
+
 ## In Progress
 (none)
 
@@ -106,10 +121,6 @@
 (none)
 
 ## Remaining
-- Task 9: Add status display helpers
-  - Create `show-notes` function: aggregate ralph.note by type
-  - Create `show-iterations` function: list ralph.iteration events
-  - Optional: call on startup to show current state
 - Task 10: Testing and polish
   - Test with simple spec file
   - Verify web UI shows titled sessions

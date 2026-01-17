@@ -15,8 +15,10 @@ let test_prompt = "exit 0"
 rm -rf /tmp/test-task7-store
 
 print "\n1. Testing iteration loop with limit of 2 iterations..."
+# Use absolute path to avoid ambiguity with parent directory named ralph.nu
+let script_path = ($env.FILE_PWD | path join ".." "ralph.nu")
 let result = (
-  timeout 15s nu ../ralph.nu --name "task7-test" --spec $test_spec --prompt $test_prompt --iterations 2 --port 4099 --store "/tmp/test-task7-store"
+  timeout 15s nu $script_path --name "task7-test" --spec $test_spec --prompt $test_prompt --iterations 2 --port 4099 --store "/tmp/test-task7-store"
   | complete
 )
 
