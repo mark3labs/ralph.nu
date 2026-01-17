@@ -96,6 +96,12 @@ def start-ngrok [
   password: string    # Basic auth password
   domain?: string     # Optional custom domain
 ] {
+  # Validate password length (ngrok requires 8-128 characters)
+  let pw_len = ($password | str length)
+  if $pw_len < 8 or $pw_len > 128 {
+    error make {msg: $"ngrok password must be 8-128 characters, got ($pw_len)"}
+  }
+  
   print "Starting ngrok tunnel..."
   
   let auth = $"ralph:($password)"
