@@ -12,7 +12,7 @@ def main [] {
   mut failed_tests = []
   
   # Get all test files (excluding helpers.nu and run-all.nu)
-  let test_files = (ls tests/task-state/*.nu 
+  let test_files = (ls *.nu 
     | where name !~ "helpers.nu" 
     | where name !~ "run-all.nu"
     | get name

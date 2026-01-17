@@ -566,12 +566,13 @@ def build-prompt [
 - session_complete\(\) - Call when ALL tasks done
 
 ## Instructions
-1. Pick ONE task from REMAINING or IN PROGRESS
-2. Call task_status\(id, \"in_progress\"\)
-3. Complete the work
-4. Call task_status\(id, \"completed\"\)
-5. Git commit with clear message
-6. If ALL tasks in the spec are done: call session_complete\(\)
+1. Make sure ALL tasks from the spec appear in the task list. If some are missing add them.
+2. Pick ONE task from REMAINING or IN PROGRESS
+3. Call task_status\(id, \"in_progress\"\)
+4. Complete the work
+5. Call task_status\(id, \"completed\"\)
+6. Git commit with clear message
+7. If ALL tasks in the spec are done: call session_complete\(\)
 
 ## Rules
 - ONE task per iteration

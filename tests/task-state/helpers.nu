@@ -3,17 +3,18 @@
 # Test helpers for task state management tests
 
 # Setup a temporary xs store for testing
-# Returns a record with store path and topic
+# Returns a record with store path, topic, and job ID
 def "setup-test-store" [] {
   let store = $"/tmp/ralph-test-(random uuid | str substring 0..8)"
-  xs serve $store --gc 1000000000 &
+  let job_id = (job spawn { xs serve $store })
   sleep 100ms
-  { store: $store, topic: "ralph.test.task" }
+  { store: $store, topic: "ralph.test.task", job_id: $job_id }
 }
 
 # Teardown test store and cleanup
 def "teardown-test-store" [ctx: record] {
-  xs .stop $ctx.store
+  try { job kill $ctx.job_id } catch { }
+  sleep 50ms
   rm -rf $ctx.store
 }
 
