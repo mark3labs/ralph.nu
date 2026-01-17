@@ -294,6 +294,28 @@ def get-task-state [
   }
 }
 
+# Get note state from append-only log
+# Notes track learnings, tips, blockers, and decisions across iterations
+def get-note-state [
+  store_path: string  # Path to the store directory
+  name: string        # Session name
+] {
+  let topic = $"ralph.($name).note"
+  let frames = (xs cat $store_path | from json --objects | where topic == $topic)
+  
+  if ($frames | is-empty) { return [] }
+  
+  $frames | each {|frame|
+    let content = (xs cas $store_path $frame.hash)
+    {
+      id: $frame.id
+      type: ($frame.meta.type? | default "note")
+      iteration: ($frame.meta.iteration? | default null)
+      content: $content
+    }
+  }
+}
+
 # Show tasks using computed task state (ID-based, reduce pattern)
 def show-notes [
   store_path: string  # Path to the store directory
