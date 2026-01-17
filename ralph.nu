@@ -2,6 +2,45 @@
 
 # ralph.nu - Iterative AI coding assistant with xs event store and opencode web UI
 
+# Kill any existing processes for this session
+def kill-existing [
+  store_path: string  # Path to the store directory
+  port: int           # Web server port
+] {
+  # Kill any existing xs serve for this store
+  let xs_pids = (pgrep -f $"xs serve ($store_path)" | complete)
+  if $xs_pids.exit_code == 0 {
+    let pids = ($xs_pids.stdout | str trim)
+    if ($pids | is-not-empty) {
+      print $"Killing existing xs serve for ($store_path)..."
+      pkill -f $"xs serve ($store_path)"
+      sleep 100ms
+    }
+  }
+  
+  # Kill any existing opencode web on this port
+  let web_pids = (pgrep -f $"opencode web --port ($port)" | complete)
+  if $web_pids.exit_code == 0 {
+    let pids = ($web_pids.stdout | str trim)
+    if ($pids | is-not-empty) {
+      print $"Killing existing opencode web on port ($port)..."
+      pkill -f $"opencode web --port ($port)"
+      sleep 100ms
+    }
+  }
+  
+  # Kill any existing ngrok http on this port
+  let ngrok_pids = (pgrep -f $"ngrok http ($port)" | complete)
+  if $ngrok_pids.exit_code == 0 {
+    let pids = ($ngrok_pids.stdout | str trim)
+    if ($pids | is-not-empty) {
+      print $"Killing existing ngrok on port ($port)..."
+      pkill -f $"ngrok http ($port)"
+      sleep 100ms
+    }
+  }
+}
+
 # Start xs store server as background job
 def start-store [
   store_path: string  # Path to the store directory
@@ -298,6 +337,9 @@ def main [
   
   # Run main logic with cleanup handling
   try {
+    # Kill any existing processes from previous runs
+    kill-existing $store $port
+    
     # Start xs store
     let store_job_id = (start-store $store)
     
