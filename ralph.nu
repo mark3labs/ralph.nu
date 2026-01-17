@@ -349,18 +349,11 @@ def main [
       # Log iteration start
       log-iteration-start $store $name $n
       
-      # Run opencode attached to web server
-      print $"DEBUG: Running opencode run --attach ($web_result.url) --title '($name) - Iteration #($n)' -m ($model)"
-      let opencode_result = (
-        opencode run --attach $web_result.url --title $"($name) - Iteration #($n)" -m $model $final_prompt
-        | complete
-      )
+      # Run opencode attached to web server (output streams to terminal)
+      opencode run --attach $web_result.url --title $"($name) - Iteration #($n)" -m $model $final_prompt
       
       # Determine status based on exit code
-      print $"DEBUG: exit_code=($opencode_result.exit_code)"
-      print $"DEBUG: stdout=($opencode_result.stdout | str substring 0..500)"
-      print $"DEBUG: stderr=($opencode_result.stderr | str substring 0..500)"
-      let status = if $opencode_result.exit_code == 0 { "success" } else { "failure" }
+      let status = if $env.LAST_EXIT_CODE == 0 { "success" } else { "failure" }
       
       # Log iteration complete
       log-iteration-complete $store $name $n $status

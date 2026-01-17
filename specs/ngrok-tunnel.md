@@ -109,30 +109,30 @@ Tunnel: https://myapp.ngrok.io (auth: ralph:mysecretpass)
 ## Tasks
 
 ### 1. Add CLI flags
-- [ ] Add `--ngrok: string` parameter (password, enables tunnel)
-- [ ] Add `--ngrok-domain: string` parameter (optional domain)
+- [x] Add `--ngrok: string` parameter (password, enables tunnel)
+- [x] Add `--ngrok-domain: string` parameter (optional domain)
 
 ### 2. Implement ngrok start function
-- [ ] Create `start-ngrok` function with port, password, domain params
-- [ ] Build ngrok command with `--basic-auth "ralph:<password>"`
-- [ ] Conditionally add `--domain` flag if provided
-- [ ] Spawn as background job
+- [x] Create `start-ngrok` function with port, password, domain params
+- [x] Build ngrok command with `--basic-auth "ralph:<password>"`
+- [x] Conditionally add `--domain` flag if provided
+- [x] Spawn as background job
 
 ### 3. Implement ngrok readiness check
-- [ ] Poll `http://localhost:4040/api/tunnels` for tunnel URL
-- [ ] Parse JSON response to extract public_url
-- [ ] Return job_id and URL on success
-- [ ] Error after timeout (15s)
+- [x] Poll `http://localhost:4040/api/tunnels` for tunnel URL
+- [x] Parse JSON response to extract public_url
+- [x] Return job_id and URL on success
+- [x] Error after timeout (15s)
 
 ### 4. Integrate into main flow
-- [ ] After `start-web` succeeds, check if `$ngrok` is set
-- [ ] Call `start-ngrok` with port, password, optional domain
-- [ ] Print tunnel URL with auth hint
-- [ ] Track ngrok job_id for cleanup
+- [x] After `start-web` succeeds, check if `$ngrok` is set
+- [x] Call `start-ngrok` with port, password, optional domain
+- [x] Print tunnel URL with auth hint
+- [x] Track ngrok job_id for cleanup
 
 ### 5. Update cleanup
-- [ ] Ensure ngrok job_id included in cleanup list
-- [ ] Verify clean shutdown on Ctrl+C
+- [x] Ensure ngrok job_id included in cleanup list
+- [x] Verify clean shutdown on Ctrl+C
 
 ## Open Questions
 - None
