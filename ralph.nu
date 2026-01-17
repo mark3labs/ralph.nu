@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
 
-# ralph.nu - Iterative AI coding assistant with xs event store and opencode web UI
+# ralph.nu - AI coding agent in a while loop. Named after Ralph Wiggum from The Simpsons.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Styling helpers - consistent colored output throughout the script
@@ -24,7 +24,7 @@ def "style section" [] { ansi magenta_bold }
 def print-banner [] {
   print $"(style header)╭─────────────────────────────────────╮(style reset)"
   print $"(style header)│(style reset)         (style bold)ralph.nu(style reset)                    (style header)│(style reset)"
-  print $"(style header)│(style reset)   (style dim)iterative AI coding assistant(style reset)   (style header)│(style reset)"
+  print $"(style header)│(style reset)   (style dim)AI agent in a while loop(style reset)       (style header)│(style reset)"
   print $"(style header)╰─────────────────────────────────────╯(style reset)"
 }
 
