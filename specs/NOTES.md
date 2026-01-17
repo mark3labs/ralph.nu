@@ -1,5 +1,9 @@
 # Ralph.nu Implementation Notes
 
+## URGENT!!!
+- Move all tests to tests/
+- Makre sure all tests have meaningful names
+
 ## Completed
 - Task 1: Create basic script skeleton (all subtasks)
   - Created ralph.nu with shebang and main function signature
@@ -75,6 +79,18 @@
     - All 4 iteration events are logged correctly (2 starts + 2 completes)
   - All tests pass
 
+- Task 8: Wire everything together (all subtasks)
+  - Main function orchestrates: init -> loop -> cleanup ✓ (already done in Task 7)
+  - Substitute placeholders in prompt template ✓ (already done in Tasks 6-7)
+  - Handle piped input vs --prompt flag vs default ✓
+  - Updated main signature to accept optional input parameter: `input?: string`
+  - Implemented priority logic: --prompt flag > piped input > default template
+  - Created test-task8.nu to verify:
+    - Signature accepts optional input parameter
+    - Prompt priority logic exists and is correct
+  - All existing tests still pass (web, logging, cleanup, prompt, task7)
+  - Main function now properly handles all three input methods
+
 ## In Progress
 (none)
 
@@ -82,10 +98,6 @@
 (none)
 
 ## Remaining
-- Task 8: Wire everything together
-  - Main function orchestrates: init -> loop -> cleanup
-  - Substitute placeholders in prompt template
-  - Handle piped input vs --prompt flag vs default
 - Task 9: Add status display helpers
   - Create `show-notes` function: aggregate ralph.note by type
   - Create `show-iterations` function: list ralph.iteration events

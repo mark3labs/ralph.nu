@@ -148,6 +148,7 @@ echo \"Task description\" | xs append ($store_path) ralph.($name).note --meta '{
 
 # Main entry point
 def main [
+  input?: string                                            # Optional piped input for prompt
   --name (-n): string                                       # REQUIRED - name for this ralph session
   --prompt (-p): string                                     # Custom prompt
   --spec (-s): string = "./specs/SPEC.md"                   # Spec file path
@@ -155,7 +156,7 @@ def main [
   --iterations (-i): int = 0                                # Number of iterations (0 = infinite)
   --port: int = 4096                                        # opencode web port
   --store: string = "./.ralph/store"                        # xs store path
-]: [string -> nothing, nothing -> nothing] {
+] {
   # Validate required parameter
   if ($name | is-empty) {
     error make {msg: "--name (-n) is required"}
@@ -189,6 +190,15 @@ def main [
     # Get parent PID for termination instruction
     let parent_pid = $nu.pid
     
+    # Determine base prompt (priority: --prompt > piped input > default template)
+    let base_prompt = if ($prompt | is-not-empty) {
+      $prompt
+    } else if ($input | is-not-empty) {
+      $input
+    } else {
+      null
+    }
+    
     # Main iteration loop
     mut n = 1
     loop {
@@ -197,8 +207,8 @@ def main [
       # Build prompt for this iteration
       let iteration_prompt = (build-prompt $spec_content $store $name $parent_pid $n)
       
-      # Use custom prompt if provided, otherwise use built template
-      let final_prompt = if ($prompt | is-not-empty) { $prompt } else { $iteration_prompt }
+      # Use base_prompt if set, otherwise use built template
+      let final_prompt = if ($base_prompt | is-not-empty) { $base_prompt } else { $iteration_prompt }
       
       # Log iteration start
       log-iteration-start $store $name $n
