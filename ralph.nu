@@ -612,6 +612,20 @@ export const session_complete = tool({
     return "Session marked complete - will exit after this iteration"
   },
 })
+
+export const note_add = tool({
+  description: "Add a note for future iterations (learnings, tips, blockers, decisions)",
+  args: {
+    content: tool.schema.string().describe("Note content - be specific and actionable"),
+    type: tool.schema.enum(["learning", "stuck", "tip", "decision"]).describe("Note category"),
+  },
+  async execute(args) {
+    const meta = JSON.stringify({ action: "add", type: args.type, iteration: ITERATION })
+    await Bun.$`echo ${args.content} | xs append ${STORE_PATH} ralph.${SESSION_NAME}.note --meta ${meta}`
+    const preview = args.content.length > 50 ? args.content.slice(0, 50) + "..." : args.content
+    return `Note added: [${args.type}] ${preview}`
+  },
+})
 '
   )
   
