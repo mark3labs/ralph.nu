@@ -42,6 +42,22 @@
   - Tested error path: cleanup properly handles errors during startup (invalid port)
   - All existing tests still pass (test-ralph-web.nu, test-ralph-logging.nu)
 
+- Task 6: Build prompt template (all subtasks)
+  - Created `build-prompt` function that generates complete prompt with placeholders
+  - Function accepts: spec_content, store_path, name, pid, iteration parameters
+  - Template includes Context section with spec, store path, and topic prefix
+  - Template includes State Commands section with xs CLI examples for:
+    - Reading all notes (xs cat + from json --objects + xs cas)
+    - Adding completed notes with iteration number
+    - Adding in_progress notes with iteration number
+    - Adding blocked notes with iteration number
+    - Adding remaining notes (no iteration number)
+  - Template includes Instructions section (7 steps from STUDY to pkill)
+  - Template includes Rules section (ONE task, run tests, document blockers)
+  - Created test-ralph-prompt.nu to verify functionality
+  - Tested successfully: all 12 verification checks passed (spec content, store path, session name, pid, iteration, xs commands, note types, termination instruction)
+  - Function properly substitutes all placeholders with provided values
+
 ## In Progress
 (none)
 
@@ -49,11 +65,6 @@
 (none)
 
 ## Remaining
-- Task 6: Build prompt template
-  - Create prompt string with {spec}, {store}, {pid} placeholders
-  - Include xs CLI examples for note CRUD
-  - Include note type categories (completed, in_progress, blocked, remaining)
-  - Include termination instruction (pkill -P {pid})
 - Task 7: Implement main iteration loop
   - Initialize servers (store, web)
   - Loop with iteration counter

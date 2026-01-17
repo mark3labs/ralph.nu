@@ -94,6 +94,58 @@ def log-iteration-complete [
   echo "" | xs append $store_path $topic --meta $meta
 }
 
+# Build prompt template with placeholders and xs CLI examples
+def build-prompt [
+  spec_content: string  # Content of the spec file
+  store_path: string    # Path to the store directory
+  name: string          # Session name
+  pid: int              # Parent process ID for termination
+  iteration: int        # Current iteration number
+] {
+  let template = $"## Context
+- Spec: ($spec_content)
+- Store: ($store_path) \(use xs CLI for state\)
+- Topic prefix: ralph.($name)
+
+## State Commands \(xs CLI\)
+# Read all notes with content
+xs cat ($store_path) | from json --objects | where topic == \"ralph.($name).note\" | each { |frame| 
+  {type: $frame.meta.type, content: \(xs cas ($store_path) $frame.hash\)} 
+}
+
+# Add completed note  
+echo \"Task description\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"completed\",\"iteration\":($iteration)}'
+
+# Add in_progress note
+echo \"Current task\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"in_progress\",\"iteration\":($iteration)}'
+
+# Add blocked note
+echo \"Blocker description\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"blocked\",\"iteration\":($iteration)}'
+
+# Add remaining note
+echo \"Task description\" | xs append ($store_path) ralph.($name).note --meta '{\"type\":\"remaining\"}'
+
+# Clear in_progress \(mark complete or move to blocked before commit\)
+
+## Instructions
+1. STUDY the spec file
+2. Query ralph.($name).note topic for current state
+3. Pick ONE pending task, complete it
+4. Append notes for your changes \(completed, blocked, remaining\)
+5. Ensure no in_progress notes remain before commit
+6. Git commit with clear message
+7. If ALL tasks done: pkill -P ($pid)
+
+## Rules
+- ONE task per iteration
+- Run tests before commit
+- Document blockers in ralph.($name).note with type \"blocked\"
+- Keep remaining tasks updated with type \"remaining\"
+"
+  
+  return $template
+}
+
 # Main entry point
 def main [
   --name (-n): string                                       # REQUIRED - name for this ralph session
