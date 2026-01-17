@@ -67,6 +67,33 @@ def cleanup [
   }
 }
 
+# Log iteration start event to xs store
+def log-iteration-start [
+  store_path: string  # Path to the store directory
+  name: string        # Session name
+  iteration: int      # Iteration number
+] {
+  let topic = $"ralph.($name).iteration"
+  let timestamp = (date now | format date "%Y-%m-%dT%H:%M:%S%z")
+  let meta = {action: "start", n: $iteration, timestamp: $timestamp} | to json -r
+  
+  echo "" | xs append $store_path $topic --meta $meta
+}
+
+# Log iteration complete event to xs store
+def log-iteration-complete [
+  store_path: string  # Path to the store directory
+  name: string        # Session name
+  iteration: int      # Iteration number
+  status: string      # Status: "success" or "failure"
+] {
+  let topic = $"ralph.($name).iteration"
+  let timestamp = (date now | format date "%Y-%m-%dT%H:%M:%S%z")
+  let meta = {action: "complete", n: $iteration, status: $status, timestamp: $timestamp} | to json -r
+  
+  echo "" | xs append $store_path $topic --meta $meta
+}
+
 # Main entry point
 def main [
   --name (-n): string                                       # REQUIRED - name for this ralph session

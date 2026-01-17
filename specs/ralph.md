@@ -53,7 +53,7 @@ echo "" | xs append ./.ralph/store ralph.auth-feature.iteration --meta '{"action
 echo "Completed auth module" | xs append ./.ralph/store ralph.auth-feature.note --meta '{"type":"completed","iteration":1}'
 
 # read current notes
-xs cat ./.ralph/store | from json -l | where topic == "ralph.auth-feature.note"
+xs cat ./.ralph/store | from json --objects | where topic == "ralph.auth-feature.note"
 ```
 
 
@@ -120,7 +120,7 @@ def cleanup [] {
 
 ## State Commands (xs CLI)
 # Read all notes with content
-xs cat {store} | from json -l | where topic == "ralph.{name}.note" | each { |frame| 
+xs cat {store} | from json --objects | where topic == "ralph.{name}.note" | each { |frame| 
   {type: $frame.meta.type, content: (xs cas {store} $frame.hash)} 
 }
 
@@ -157,7 +157,7 @@ echo "Task description" | xs append {store} ralph.{name}.note --meta '{"type":"r
 ### Aggregating Notes for Display (internal use)
 ```nushell
 # get current note state using xs CLI (where name = "auth-feature")
-xs cat ./.ralph/store | from json -l | where topic == "ralph.auth-feature.note" | each {|frame|
+xs cat ./.ralph/store | from json --objects | where topic == "ralph.auth-feature.note" | each {|frame|
   let content = (xs cas ./.ralph/store $frame.hash)
   {
     type: $frame.meta.type
