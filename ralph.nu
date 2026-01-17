@@ -693,7 +693,8 @@ def build-prompt [
 4. Complete the work
 5. Call task_status\(id, \"completed\"\)
 6. Git commit with clear message
-7. If ALL tasks in the spec are done: call session_complete\(\)
+7. If stuck or learned something important: call note_add\(\)
+8. If ALL tasks in the spec are done: call session_complete\(\)
 
 ## Rules
 - ONE task per iteration
