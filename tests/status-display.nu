@@ -1,14 +1,14 @@
 #!/usr/bin/env nu
 
-# Test Task 9: Status display helpers (show-notes and show-iterations)
+# Test Task 9: Status display helpers (show-tasks and show-iterations)
 
 use std/assert
 source ../ralph.nu
 
-def "test show-notes empty store" [store: string] {
-  print "\n2. Testing show-notes with empty store..."
-  show-notes $store "test-session"
-  print "✓ show-notes handles empty store correctly"
+def "test show-tasks empty store" [store: string] {
+  print "\n2. Testing show-tasks with empty store..."
+  show-tasks $store "test-session"
+  print "✓ show-tasks handles empty store correctly"
 }
 
 def "test show-iterations empty store" [store: string] {
@@ -17,20 +17,20 @@ def "test show-iterations empty store" [store: string] {
   print "✓ show-iterations handles empty store correctly"
 }
 
-def "test show-notes with data" [store: string] {
-  print "\n4. Adding test notes to store..."
-  echo "Completed task 1" | xs append $store ralph.test-session.note --meta '{"type":"completed","iteration":1}'
-  echo "Completed task 2" | xs append $store ralph.test-session.note --meta '{"type":"completed","iteration":2}'
-  echo "Working on task 3" | xs append $store ralph.test-session.note --meta '{"type":"in_progress","iteration":3}'
-  echo "Blocked by dependency" | xs append $store ralph.test-session.note --meta '{"type":"blocked","iteration":3}'
-  echo "Task 4 pending" | xs append $store ralph.test-session.note --meta '{"type":"remaining"}'
-  echo "Task 5 pending" | xs append $store ralph.test-session.note --meta '{"type":"remaining"}'
+def "test show-tasks with data" [store: string] {
+  print "\n4. Adding test tasks to store..."
+  echo "Completed task 1" | xs append $store ralph.test-session.task --meta '{"action":"add","status":"completed","iteration":1}'
+  echo "Completed task 2" | xs append $store ralph.test-session.task --meta '{"action":"add","status":"completed","iteration":2}'
+  echo "Working on task 3" | xs append $store ralph.test-session.task --meta '{"action":"add","status":"in_progress","iteration":3}'
+  echo "Blocked by dependency" | xs append $store ralph.test-session.task --meta '{"action":"add","status":"blocked","iteration":3}'
+  echo "Task 4 pending" | xs append $store ralph.test-session.task --meta '{"action":"add","status":"remaining"}'
+  echo "Task 5 pending" | xs append $store ralph.test-session.task --meta '{"action":"add","status":"remaining"}'
   
-  print "✓ Added 6 test notes"
+  print "✓ Added 6 test tasks"
   
-  print "\n5. Testing show-notes with populated store..."
-  show-notes $store "test-session"
-  print "✓ show-notes displays notes (visual verification above)"
+  print "\n5. Testing show-tasks with populated store..."
+  show-tasks $store "test-session"
+  print "✓ show-tasks displays tasks (visual verification above)"
 }
 
 def "test show-iterations with data" [store: string] {
@@ -52,9 +52,9 @@ def "test show-iterations with data" [store: string] {
 
 def "test store data verification" [store: string] {
   print "\n8. Verifying data in store..."
-  let note_count = (xs cat $store | from json --objects | where topic == "ralph.test-session.note" | length)
-  assert equal $note_count 6 "Expected 6 notes in store"
-  print $"✓ Correct number of notes in store: ($note_count)"
+  let task_count = (xs cat $store | from json --objects | where topic == "ralph.test-session.task" | length)
+  assert equal $task_count 6 "Expected 6 tasks in store"
+  print $"✓ Correct number of tasks in store: ($task_count)"
   
   let iter_count = (xs cat $store | from json --objects | where topic == "ralph.test-session.iteration" | length)
   assert equal $iter_count 4 "Expected 4 iteration events in store"
@@ -75,9 +75,9 @@ try {
   print "✓ Store started"
   
   # Run tests in sequence
-  do { test show-notes empty store $test_store }
+  do { test show-tasks empty store $test_store }
   do { test show-iterations empty store $test_store }
-  do { test show-notes with data $test_store }
+  do { test show-tasks with data $test_store }
   do { test show-iterations with data $test_store }
   do { test store data verification $test_store }
   

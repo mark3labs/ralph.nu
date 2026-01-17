@@ -14,6 +14,7 @@ def main [] {
     "iteration-loop.nu"
     "web-server-start.nu"
     "iteration-logging.nu"
+    "notes.nu"
     "integration.nu"
   ]
   
