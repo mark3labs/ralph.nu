@@ -717,6 +717,13 @@ def main [
   --ngrok: string = ""                                      # Enable ngrok tunnel with this password
   --ngrok-domain: string = ""                               # Custom ngrok domain (optional)
 ] {
+  # Exit early if being sourced (not executed directly)
+  # When sourced from tests, $env.CURRENT_FILE will be the test file, not ralph.nu
+  let current_file = ($env.CURRENT_FILE? | default "")
+  if ($current_file | str contains "tests/") {
+    return
+  }
+  
   # Validate required parameter
   if ($name | is-empty) {
     print-err "Missing required parameter: --name (-n)"
