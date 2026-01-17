@@ -1,7 +1,7 @@
 #!/usr/bin/env nu
 
 # Test suite for start-web function
-# Verifies that start-web can start opencode web and poll it successfully
+# Verifies that start-web can start opencode serve and poll it successfully
 
 use std/assert
 use mod.nu [run-tests]

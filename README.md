@@ -84,7 +84,7 @@ What the feature does.
 
 ## Web UI
 
-Access the opencode web UI at `http://localhost:4096` (or your ngrok URL).
+Access the opencode serve UI at `http://localhost:4096` (or your ngrok URL).
 
 ## Data
 

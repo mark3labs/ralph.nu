@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add optional ngrok tunneling to expose opencode web UI publicly with basic auth protection.
+Add optional ngrok tunneling to expose opencode serve UI publicly with basic auth protection.
 
 ## User Story
 
@@ -15,8 +15,8 @@ Developer wants to share/access ralph session remotely without port forwarding o
 - `--ngrok-domain <domain>`: Optional custom ngrok domain (uses random subdomain if omitted)
 
 ### Behavior
-- ngrok launches AFTER opencode web is ready
-- Forwards to `localhost:<port>` (the opencode web port)
+- ngrok launches AFTER opencode serve is ready
+- Forwards to `localhost:<port>` (the opencode serve port)
 - Basic auth: username = "ralph", password = provided value
 - Print public URL after tunnel established
 - Kill ngrok process on cleanup
@@ -83,7 +83,7 @@ def main [
 $ ralph.nu -n "feature" --ngrok mysecretpass
 
 Starting xs store at ./.ralph/store...
-Starting opencode web on port 4096...
+Starting opencode serve on port 4096...
 Web UI: http://localhost:4096
 Starting ngrok tunnel...
 Tunnel: https://abc123.ngrok.io (auth: ralph:mysecretpass)

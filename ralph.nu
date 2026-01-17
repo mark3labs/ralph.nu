@@ -71,13 +71,13 @@ def kill-existing [
     }
   }
   
-  # Kill any existing opencode web on this port
-  let web_pids = (pgrep -f $"opencode web --port ($port)" | complete)
+  # Kill any existing opencode serve on this port
+  let web_pids = (pgrep -f $"opencode serve --port ($port)" | complete)
   if $web_pids.exit_code == 0 {
     let pids = ($web_pids.stdout | str trim)
     if ($pids | is-not-empty) {
-      print-status $"Killing existing opencode web on port (style value)($port)(style reset)..."
-      pkill -f $"opencode web --port ($port)"
+      print-status $"Killing existing opencode serve on port (style value)($port)(style reset)..."
+      pkill -f $"opencode serve --port ($port)"
       sleep 100ms
     }
   }
@@ -120,27 +120,27 @@ def start-store [
   error make {msg: "xs store failed to start after 3 seconds"}
 }
 
-# Start opencode web server as background job
+# Start opencode serve server as background job
 def start-web [
   port: int  # Port for the web server
 ] {
-  print-status $"Starting opencode web on port (style value)($port)(style reset)..."
+  print-status $"Starting opencode serve on port (style value)($port)(style reset)..."
   
-  # Start opencode web as background job and capture job ID
-  let job_id = (job spawn { opencode web --port $port })
+  # Start opencode serve as background job and capture job ID
+  let job_id = (job spawn { opencode serve --port $port })
   
   # Wait for web server to be ready (poll with curl)
   for attempt in 0..30 {
     let result = (curl -s -o /dev/null -w "%{http_code}" $"http://localhost:($port)" | complete)
     if $result.exit_code == 0 and ($result.stdout | into int) < 500 {
-      print-ok $"opencode web ready at (style url)http://localhost:($port)(style reset)"
+      print-ok $"opencode serve ready at (style url)http://localhost:($port)(style reset)"
       return {job_id: $job_id, url: $"http://localhost:($port)"}
     }
     sleep 100ms
   }
   
   # If we get here, web server didn't start
-  error make {msg: "opencode web failed to start after 3 seconds"}
+  error make {msg: "opencode serve failed to start after 3 seconds"}
 }
 
 # Start ngrok tunnel as background job
@@ -588,7 +588,7 @@ def main [
   --spec (-s): string = "./specs/SPEC.md"                   # Spec file path
   --model (-m): string = "anthropic/claude-sonnet-4-5"      # Model to use
   --iterations (-i): int = 0                                # Number of iterations (0 = infinite)
-  --port: int = 4096                                        # opencode web port
+  --port: int = 4096                                        # opencode serve port
   --store: string = "./.ralph/store"                        # xs store path
   --ngrok: string = ""                                      # Enable ngrok tunnel with this password
   --ngrok-domain: string = ""                               # Custom ngrok domain (optional)
@@ -623,7 +623,7 @@ def main [
     # Start xs store
     let store_job_id = (start-store $store)
     
-    # Start opencode web
+    # Start opencode serve
     let web_result = (start-web $port)
     
     # Start ngrok tunnel if requested

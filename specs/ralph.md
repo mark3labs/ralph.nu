@@ -3,7 +3,7 @@
 ## Overview
 
 Enhanced iterative AI coding assistant that:
-- Runs opencode web as background job
+- Runs opencode serve as background job
 - Attaches opencode instances to running server per iteration
 - Persists notes/state via xs event stream instead of markdown file
 - Provides real-time visibility into iteration progress
@@ -19,7 +19,7 @@ Developer wants autonomous AI coding iterations with:
 ## Requirements
 
 ### Background Web Server
-- Start `opencode web --port <port>` as nushell background job via `job spawn`
+- Start `opencode serve --port <port>` as nushell background job via `job spawn`
 - Capture assigned port (use fixed port like 4096 for simplicity)
 - Server persists across all iterations
 - Cleanup on script exit via `job kill`
@@ -71,7 +71,7 @@ ralph.nu [options]
   --spec (-s): string       # spec file path (default: ./specs/SPEC.md)
   --model (-m): string      # model (default: anthropic/claude-sonnet-4-5)
   --iterations (-i): int    # iterations (0 = infinite)
-  --port: int               # opencode web port (default: 4096)
+  --port: int               # opencode serve port (default: 4096)
   --store: string           # xs store path (default: ./.ralph/store)
 ```
 
@@ -80,7 +80,7 @@ ralph.nu [options]
 ### Initialization Sequence
 1. Create store dir: `mkdir -p ./.ralph/store`
 2. Start xs serve: `job spawn { xs serve ./.ralph/store }`
-3. Start opencode web: `job spawn { opencode web --port 4096 }`
+3. Start opencode serve: `job spawn { opencode serve --port 4096 }`
 4. Wait for servers: poll until responsive (xs version, curl)
 
 ### Iteration Loop
@@ -173,7 +173,7 @@ xs cat ./.ralph/store | from json --objects | where topic == "ralph.auth-feature
 $ ralph.nu -n "auth-feature" -s ./specs/feature.md -i 5
 
 Starting xs store at ./.ralph/store...
-Starting opencode web on port 4096...
+Starting opencode serve on port 4096...
 Web UI: http://localhost:4096
 
 auth-feature - Iteration #1...
@@ -189,7 +189,7 @@ Cleaning up background jobs...
 ```
 
 ## Out of Scope (v1)
-- Web dashboard for ralph-specific state (use opencode web UI)
+- Web dashboard for ralph-specific state (use opencode serve UI)
 - Resume from specific iteration
 - Parallel iterations
 - Remote xs stores
@@ -207,8 +207,8 @@ Cleaning up background jobs...
 - [ ] Return store path for $env.XS_ADDR
 - [ ] Add wait/poll loop until store responds (xs version)
 
-### 3. Implement opencode web management  
-- [ ] Create `start-web` function: job spawn opencode web --port
+### 3. Implement opencode serve management  
+- [ ] Create `start-web` function: job spawn opencode serve --port
 - [ ] Add wait/poll loop until web responds (curl localhost:port)
 - [ ] Return server URL for --attach
 

@@ -40,7 +40,7 @@ print "   ✓ Store directory exists"
 
 print "\n3. Checking that servers were started..."
 assert str contains $result.stdout "Starting xs store"
-assert str contains $result.stdout "Starting opencode web"
+assert str contains $result.stdout "Starting opencode serve"
 assert str contains $result.stdout "http://localhost:4099"
 print "   ✓ All server checks passed"
 
