@@ -53,6 +53,46 @@ Example:
 2. Save to `specs/<feature-name>.md`
 3. Update `specs/README.md` index table
 
+## Testing
+
+Test suite uses Nushell's `std/assert` module and a custom test framework in `tests/mod.nu`.
+
+### Running Tests
+
+Run all tests:
+```bash
+nu tests/run-all.nu
+```
+
+Run individual test file:
+```bash
+nu tests/prompt-template.nu
+```
+
+### Test Structure
+
+Unit tests use `def "test ..."` naming pattern:
+```nu
+use std/assert
+use mod.nu [run-tests]
+
+def "test feature works" [] {
+  let result = (my-function "input")
+  assert equal $result "expected"
+}
+
+run-tests
+```
+
+Integration tests keep standalone structure with explicit setup/cleanup blocks.
+
+### Test Helpers
+
+`tests/mod.nu` provides:
+- `run-tests` - Discovers and executes all `def "test ..."` functions
+- `setup-test-store` - Creates temporary xs store for testing
+- `teardown-test-store` - Cleans up test store and background jobs
+
 ## btca
 
 When you need up-to-date information about technologies used in this project, use btca to query source repositories directly.
