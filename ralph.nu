@@ -466,7 +466,7 @@ def main [
   print ""
   
   # Helper to cleanup all jobs
-  def cleanup-all [ngrok_job?: int] {
+  def cleanup-all [] {
     let jobs = (job list | get id)
     if ($jobs | is-not-empty) {
       cleanup $jobs
