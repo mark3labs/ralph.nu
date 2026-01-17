@@ -626,6 +626,29 @@ export const note_add = tool({
     return `Note added: [${args.type}] ${preview}`
   },
 })
+
+export const note_list = tool({
+  description: "List notes from this session",
+  args: {
+    type: tool.schema.enum(["learning", "stuck", "tip", "decision"]).optional().describe("Filter by type"),
+  },
+  async execute(args) {
+    const typeFilter = args.type ? `| where {|n| $n.type == "${args.type}"}` : ""
+    const cmd = `
+      let topic = "ralph.${SESSION_NAME}.note"
+      xs cat ${STORE_PATH} | from json --objects | where topic == $topic | each {|f|
+        {
+          id: $f.id
+          type: ($f.meta.type? | default "note")
+          iteration: ($f.meta.iteration? | default null)
+          content: (xs cas ${STORE_PATH} $f.hash)
+        }
+      } ${typeFilter} | to json
+    `
+    const result = await Bun.$`nu -c ${cmd}`.text()
+    return result.trim() || "No notes yet"
+  },
+})
 '
   )
   
