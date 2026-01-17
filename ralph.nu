@@ -289,7 +289,7 @@ def main [
   print $"Port: ($port)"
   
   # Helper to cleanup all jobs
-  def cleanup-all [] {
+  def cleanup-all [ngrok_job?: int] {
     let jobs = (job list | get id)
     if ($jobs | is-not-empty) {
       cleanup $jobs
@@ -304,6 +304,13 @@ def main [
     # Start opencode web
     let web_result = (start-web $port)
     print $"Web UI: ($web_result.url)"
+    
+    # Start ngrok tunnel if requested
+    mut ngrok_job_id = null
+    if ($ngrok | is-not-empty) {
+      let ngrok_result = (start-ngrok $port $ngrok $ngrok_domain)
+      $ngrok_job_id = $ngrok_result.job_id
+    }
     
     # Display current state (if any previous sessions exist)
     try {
