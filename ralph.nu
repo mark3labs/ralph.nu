@@ -668,14 +668,15 @@ export const session_complete = tool({
     
     try {
       // Write timestamp-based marker - ralph.nu will check for any session_complete frame
-      const meta = JSON.stringify({ action: "session_complete", ts: Date.now() })
+      const ts = Date.now()
+      const meta = JSON.stringify({ action: "session_complete", ts })
       const topic = `ralph.${session}.control`
-      await withRetry(async () => {
-        await Bun.$`echo "complete" | xs append ${STORE} ${topic} --meta ${meta}`.text()
+      const result = await withRetry(async () => {
+        return await Bun.$`echo "complete" | xs append ${STORE} ${topic} --meta ${meta}`.text()
       })
-      return `Session "${session}" marked complete`
+      return `Session "${session}" marked complete (ts=${ts}, store=${STORE}, result=${result.slice(0,50)}...)`
     } catch (e) {
-      return `ERROR: ${(e as Error).message}`
+      return `ERROR: ${(e as Error).message} (store=${STORE})`
     }
   },
 })
