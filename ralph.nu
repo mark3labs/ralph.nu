@@ -316,6 +316,32 @@ def get-note-state [
   }
 }
 
+# Format notes for prompt injection
+# Only shows notes from previous iterations (not current)
+def format-notes-for-prompt [notes: list, current_iteration: int] {
+  # Filter to notes from previous iterations only
+  let prev_notes = ($notes | where {|n| 
+    $n.iteration != null and $n.iteration < $current_iteration
+  })
+  
+  if ($prev_notes | is-empty) { return "" }
+  
+  let grouped = ($prev_notes | group-by type)
+  mut lines = ["## Notes from Previous Iterations"]
+  
+  for type in ["stuck", "learning", "tip", "decision"] {
+    let type_notes = ($grouped | get -o $type | default [])
+    if ($type_notes | length) > 0 {
+      $lines = ($lines | append $"($type | str upcase):")
+      for note in $type_notes {
+        $lines = ($lines | append $"  - [#($note.iteration)] ($note.content)")
+      }
+    }
+  }
+  
+  $lines | str join "\n"
+}
+
 # Show tasks using computed task state (ID-based, reduce pattern)
 def show-notes [
   store_path: string  # Path to the store directory
