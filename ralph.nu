@@ -106,27 +106,23 @@ def start-ngrok [
   
   let auth = $"ralph:($password)"
   
-  # Start ngrok as background job
-  # Note: Variables must be interpolated directly - job spawn doesn't capture outer scope
-  let job_id = if ($domain | is-not-empty) {
-    job spawn { ngrok http $port --basic-auth $auth --domain $domain }
+  # Start ngrok in background using bash (nushell job spawn has issues with http in same function)
+  let cmd = if ($domain | is-not-empty) {
+    $"ngrok http ($port) --basic-auth '($auth)' --domain '($domain)' &"
   } else {
-    job spawn { ngrok http $port --basic-auth $auth }
+    $"ngrok http ($port) --basic-auth '($auth)' &"
   }
+  ^bash -c $cmd
   
   # Poll ngrok API for public URL
   for attempt in 0..30 {
-    let result = (curl -s http://localhost:4040/api/tunnels | complete)
-    if $result.exit_code == 0 {
-      try {
-        let tunnels = ($result.stdout | from json)
-        if ($tunnels.tunnels | length) > 0 {
-          let url = $tunnels.tunnels.0.public_url
-          print $"Tunnel: ($url) (auth: ralph:($password))"
-          return {job_id: $job_id, url: $url}
-        }
-      } catch {
-        # JSON parse may fail if ngrok not ready yet
+    let result = (do { ^curl -s http://localhost:4040/api/tunnels } | complete)
+    if $result.exit_code == 0 and ($result.stdout | str trim | is-not-empty) {
+      let response = ($result.stdout | from json)
+      if ($response.tunnels? | default [] | is-not-empty) {
+        let url = $response.tunnels.0.public_url
+        print $"Tunnel: ($url) \(auth: ralph:($password)\)"
+        return {url: $url}
       }
     }
     sleep 500ms
