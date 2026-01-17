@@ -663,24 +663,45 @@ export const task_list = tool({
 export const session_complete = tool({
   description: "Signal that ALL tasks are complete and terminate the ralph session. Only call when every task is done.",
   args: {
-    session_name: tool.schema.string().describe("Session name (from Context section of prompt)"),
+    session_name: tool.schema.string().min(1).describe("Session name (from Context section of prompt) - REQUIRED"),
   },
   async execute(args) {
+    console.log(`[DEBUG session_complete] Starting - session_name: ${args.session_name}`)
+    console.log(`[DEBUG session_complete] STORE_PATH: ${STORE_PATH}`)
+    console.log(`[DEBUG session_complete] SESSION_NAME: ${SESSION_NAME}`)
+    
+    // Validate required params
+    if (!args.session_name || args.session_name.trim() === "") {
+      const err = "ERROR: session_name is required. Use the session name from the Context section of the prompt."
+      console.log(`[DEBUG session_complete] ${err}`)
+      return err
+    }
+    
     // Health check first
+    console.log(`[DEBUG session_complete] Checking store health...`)
     const healthy = await checkStoreHealth()
+    console.log(`[DEBUG session_complete] Store healthy: ${healthy}`)
     if (!healthy) {
       return "ERROR: xs store not responding. The ralph session may need to be restarted."
     }
     
+    console.log(`[DEBUG session_complete] Getting current iteration...`)
     const iteration = await getCurrentIteration()
+    console.log(`[DEBUG session_complete] Current iteration: ${iteration}`)
     const meta = JSON.stringify({ action: "session_complete", iteration })
+    console.log(`[DEBUG session_complete] Meta: ${meta}`)
     
     try {
+      console.log(`[DEBUG session_complete] Attempting xs append...`)
       await withRetry(async () => {
+        const cmd = `echo "complete" | xs append ${STORE_PATH} ralph.${args.session_name}.control --meta '${meta}'`
+        console.log(`[DEBUG session_complete] Command: ${cmd}`)
         await Bun.$`echo "complete" | xs append ${STORE_PATH} ralph.${args.session_name}.control --meta ${meta}`.text()
       })
+      console.log(`[DEBUG session_complete] Success!`)
       return `Session marked complete (iteration ${iteration}) - will exit after this iteration`
     } catch (e) {
+      console.log(`[DEBUG session_complete] Error: ${(e as Error).message}`)
       return `ERROR: Failed to signal session complete after 3 retries: ${(e as Error).message}`
     }
   },
