@@ -15,6 +15,13 @@
   - Tested successfully: store starts, accepts appends, and can be queried
   - Note: Function doesn't need to return store path (it's passed in as parameter)
 
+- Task 3: Implement opencode web management (all subtasks)
+  - Created `start-web` function with job spawn opencode web --port
+  - Implemented wait/poll loop using curl to verify web server responds (30 attempts @ 100ms)
+  - Returns server URL (http://localhost:{port}) for --attach usage
+  - Created test-ralph-web.nu to validate functionality
+  - Tested successfully: web server starts on port 4097, responds with HTTP 200, and cleans up properly
+
 ## In Progress
 (none)
 
@@ -22,10 +29,6 @@
 (none)
 
 ## Remaining
-- Task 3: Implement opencode web management
-  - Create `start-web` function: job spawn opencode web --port
-  - Add wait/poll loop until web responds (curl localhost:port)
-  - Return server URL for --attach
 - Task 4: Implement cleanup handler
   - Create `cleanup` function to kill all spawned jobs
   - Track job IDs from spawn calls

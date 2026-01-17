@@ -28,6 +28,29 @@ def start-store [
   error make {msg: "xs store failed to start after 3 seconds"}
 }
 
+# Start opencode web server as background job
+def start-web [
+  port: int  # Port for the web server
+] {
+  print $"Starting opencode web on port ($port)..."
+  
+  # Start opencode web as background job
+  job spawn { opencode web --port $port }
+  
+  # Wait for web server to be ready (poll with curl)
+  for attempt in 0..30 {
+    let result = (curl -s -o /dev/null -w "%{http_code}" $"http://localhost:($port)" | complete)
+    if $result.exit_code == 0 and ($result.stdout | into int) < 500 {
+      print $"opencode web is ready at http://localhost:($port)"
+      return $"http://localhost:($port)"
+    }
+    sleep 100ms
+  }
+  
+  # If we get here, web server didn't start
+  error make {msg: "opencode web failed to start after 3 seconds"}
+}
+
 # Main entry point
 def main [
   --name (-n): string                                       # REQUIRED - name for this ralph session
