@@ -183,8 +183,49 @@ def main [
     let web_result = (start-web $port)
     print $"Web UI: ($web_result.url)"
     
-    # TODO: Implement iteration loop here (Task 7)
-    print "\nIteration loop not yet implemented (Task 7)"
+    # Read spec file
+    let spec_content = (open $spec)
+    
+    # Get parent PID for termination instruction
+    let parent_pid = $nu.pid
+    
+    # Main iteration loop
+    mut n = 1
+    loop {
+      print $"\n($name) - Iteration #($n)..."
+      
+      # Build prompt for this iteration
+      let iteration_prompt = (build-prompt $spec_content $store $name $parent_pid $n)
+      
+      # Use custom prompt if provided, otherwise use built template
+      let final_prompt = if ($prompt | is-not-empty) { $prompt } else { $iteration_prompt }
+      
+      # Log iteration start
+      log-iteration-start $store $name $n
+      
+      # Run opencode attached to web server
+      let opencode_result = (
+        opencode run --attach $web_result.url --title $"($name) - Iteration #($n)" $final_prompt
+        | complete
+      )
+      
+      # Determine status based on exit code
+      let status = if $opencode_result.exit_code == 0 { "success" } else { "failure" }
+      
+      # Log iteration complete
+      log-iteration-complete $store $name $n $status
+      
+      print "Done!"
+      
+      # Increment counter
+      $n += 1
+      
+      # Check iteration limit (0 = infinite)
+      if $iterations > 0 and $n > $iterations {
+        print $"\nCompleted ($iterations) iterations. Exiting."
+        break
+      }
+    }
     
   } catch { |err|
     print $"\nError occurred: ($err.msg)"

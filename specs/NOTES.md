@@ -58,6 +58,23 @@
   - Tested successfully: all 12 verification checks passed (spec content, store path, session name, pid, iteration, xs commands, note types, termination instruction)
   - Function properly substitutes all placeholders with provided values
 
+- Task 7: Implement main iteration loop (all subtasks)
+  - Implemented iteration loop with counter starting at 1
+  - Loop reads spec file and builds prompt using build-prompt function
+  - Supports custom --prompt override or uses built template
+  - Logs iteration start before running opencode
+  - Runs opencode with --attach to web server and --title "Session - Iteration #N"
+  - Captures opencode exit code and logs iteration complete with success/failure status
+  - Handles --iterations limit: 0 = infinite loop, N > 0 stops after N iterations
+  - Created comprehensive test (test-task7.nu) that verifies:
+    - Both iterations execute
+    - Loop stops after specified iteration count
+    - Store directory is created
+    - Both servers (xs store and opencode web) start successfully
+    - Web UI URL is displayed
+    - All 4 iteration events are logged correctly (2 starts + 2 completes)
+  - All tests pass
+
 ## In Progress
 (none)
 
@@ -65,12 +82,6 @@
 (none)
 
 ## Remaining
-- Task 7: Implement main iteration loop
-  - Initialize servers (store, web)
-  - Loop with iteration counter
-  - Call opencode run --attach --title "Iteration #N"
-  - Log iteration start/complete
-  - Handle --iterations limit (0 = infinite)
 - Task 8: Wire everything together
   - Main function orchestrates: init -> loop -> cleanup
   - Substitute placeholders in prompt template
