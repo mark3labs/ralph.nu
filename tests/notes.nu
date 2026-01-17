@@ -121,4 +121,36 @@ def "test notes persist across ralph.nu restarts" [] {
   teardown-test-store $test_store
 }
 
+def "test notes appear in prompt for subsequent iterations" [] {
+  let test_store = (setup-test-store)
+  
+  print "\nTesting notes injection in prompts..."
+  
+  # Add notes from iteration 1 and 2
+  print "1. Adding notes from iterations 1 and 2..."
+  echo "Need exponential backoff" | xs append $test_store ralph.prompt-test.note --meta '{"action":"add","type":"stuck","iteration":1}'
+  echo "Rate limit is 100/min" | xs append $test_store ralph.prompt-test.note --meta '{"action":"add","type":"learning","iteration":2}'
+  
+  # Build prompt for iteration 3 - should include notes from 1 and 2
+  print "2. Building prompt for iteration 3..."
+  let task_state = {completed: [], in_progress: [], blocked: [], remaining: []}
+  let prompt = (build-prompt "Test spec content" $test_store "prompt-test" 3 $task_state)
+  
+  print "   Checking prompt contains notes section..."
+  assert str contains $prompt "## Notes from Previous Iterations"
+  assert str contains $prompt "exponential backoff"
+  assert str contains $prompt "Rate limit"
+  assert str contains $prompt "[#1]"
+  assert str contains $prompt "[#2]"
+  
+  # Build prompt for iteration 1 - should NOT include any notes (no previous iterations)
+  print "3. Building prompt for iteration 1..."
+  let prompt_iter1 = (build-prompt "Test spec" $test_store "prompt-test" 1 $task_state)
+  assert not ($prompt_iter1 | str contains "## Notes from Previous Iterations")
+  
+  print "✓ Notes correctly appear in prompts for subsequent iterations only"
+  
+  teardown-test-store $test_store
+}
+
 run-tests
