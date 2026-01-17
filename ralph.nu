@@ -499,7 +499,15 @@ def generate-tools [
   store_path: string  # Path to the store directory
   name: string        # Session name
   iteration: int      # Current iteration number
+  --force             # Overwrite existing tools
 ] {
+  let tool_path = ".opencode/tool/ralph.ts"
+  
+  # Skip if tools exist and not forcing regeneration
+  if (not $force) and ($tool_path | path exists) {
+    return
+  }
+  
   let abs_store = ($store_path | path expand)
   
   # Create tool directory
@@ -605,10 +613,12 @@ export const task_list = tool({
 
 export const session_complete = tool({
   description: "Signal that ALL tasks are complete and terminate the ralph session. Only call when every task is done.",
-  args: {},
-  async execute() {
+  args: {
+    session_name: tool.schema.string().describe("Session name (from Context section of prompt)"),
+  },
+  async execute(args) {
     const meta = JSON.stringify({ action: "session_complete", iteration: ITERATION })
-    await Bun.$`xs append ${STORE_PATH} ralph.${SESSION_NAME}.control --meta ${meta}`
+    await Bun.$`xs append ${STORE_PATH} ralph.${args.session_name}.control --meta ${meta}`.text()
     return "Session marked complete - will exit after this iteration"
   },
 })
@@ -670,6 +680,7 @@ def build-prompt [
   let notes_section = (format-notes-for-prompt $notes $iteration)
   
   let template = $"## Context
+- Session: ($name)
 - Spec: ($spec_content)
 - Iteration: #($iteration)
 
@@ -682,7 +693,7 @@ def build-prompt [
 - task_add\(content, status?\) - Add new task
 - task_status\(id, status\) - Update task \(use IDs from list above\)
 - task_list\(\) - Refresh task list
-- session_complete\(\) - Call when ALL tasks done
+- session_complete\(session_name\) - Call when ALL tasks done
 - note_add\(content, type\) - Record learning/tip/blocker/decision for future iterations
 - note_list\(type?\) - View session notes
 
@@ -694,7 +705,7 @@ def build-prompt [
 5. Call task_status\(id, \"completed\"\)
 6. Git commit with clear message
 7. If stuck or learned something important: call note_add\(\)
-8. If ALL tasks in the spec are done: call session_complete\(\)
+8. If ALL tasks in the spec are done: call session_complete\(\"($name)\"\)
 
 ## Rules
 - ONE task per iteration
@@ -716,6 +727,7 @@ def main [
   --store: string = "./.ralph/store"                        # xs store path
   --ngrok: string = ""                                      # Enable ngrok tunnel with this password
   --ngrok-domain: string = ""                               # Custom ngrok domain (optional)
+  --regen-tools                                             # Regenerate tool definitions (overwrites existing)
 ] {
   # Exit early if being sourced (not executed directly)
   # When sourced from tests, $env.CURRENT_FILE will be the test file, not ralph.nu
@@ -809,8 +821,8 @@ def main [
       print $"(style header)  ($name)(style reset) (style dim)·(style reset) (style value)Iteration #($n)(style reset)"
       print $"(style header)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━(style reset)\n"
       
-      # Generate custom tools for this iteration
-      generate-tools $store $name $n
+      # Generate custom tools (skip if already exist, unless --regen-tools on first iteration)
+      generate-tools $store $name $n --force=($regen_tools and $n == ($last_iter + 1))
       
       # Get current task state for this iteration
       let task_state = (get-task-state $store $name)

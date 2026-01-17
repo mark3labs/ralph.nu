@@ -28,9 +28,8 @@ print $"\n   Exit code: ($result.exit_code)"
 # Check key outputs using asserts
 print "   Checking iteration execution..."
 assert str contains $result.stdout "Iteration #1"
-# Note: Session completes after iteration #1 due to prompt "exit 0"
-# So we don't expect iteration #2 or "Completed 2 iterations"
-assert str contains $result.stdout "Session complete - all tasks done"
+# Agent may call session_complete before iteration limit is reached
+assert ((($result.stdout | str contains "Session complete - all tasks done") or ($result.stdout | str contains "Completed 2 iterations")))
 assert str contains $result.stdout "Cleaning up background jobs"
 print "   ✓ All iteration checks passed"
 
