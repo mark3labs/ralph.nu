@@ -2,6 +2,7 @@
 
 # Test Task 9: Status display helpers (show-notes and show-iterations)
 
+use std/assert
 source ../ralph.nu
 
 print "Testing Task 9: Status display helpers..."
@@ -63,20 +64,12 @@ try {
   print "\n8. Verifying data in store..."
   # Verify we can query the store directly to confirm data was stored
   let note_count = (xs cat $test_store | from json --objects | where topic == "ralph.test-session.note" | length)
-  if $note_count == 6 {
-    print $"✓ Correct number of notes in store: ($note_count)"
-  } else {
-    print $"✗ Expected 6 notes, found ($note_count)"
-    exit 1
-  }
+  assert equal $note_count 6 "Expected 6 notes in store"
+  print $"✓ Correct number of notes in store: ($note_count)"
   
   let iter_count = (xs cat $test_store | from json --objects | where topic == "ralph.test-session.iteration" | length)
-  if $iter_count == 4 {
-    print $"✓ Correct number of iteration events in store: ($iter_count)"
-  } else {
-    print $"✗ Expected 4 iteration events, found ($iter_count)"
-    exit 1
-  }
+  assert equal $iter_count 4 "Expected 4 iteration events in store"
+  print $"✓ Correct number of iteration events in store: ($iter_count)"
   
   # Cleanup
   print "\n9. Cleaning up..."
