@@ -100,15 +100,13 @@ def start-ngrok [
   
   let auth = $"ralph:($password)"
   
-  # Build ngrok command arguments
-  let args = if ($domain | is-not-empty) {
-    ["http", $port, "--basic-auth", $auth, "--domain", $domain]
-  } else {
-    ["http", $port, "--basic-auth", $auth]
-  }
-  
   # Start ngrok as background job
-  let job_id = (job spawn { ngrok ...$args })
+  # Note: Variables must be interpolated directly - job spawn doesn't capture outer scope
+  let job_id = if ($domain | is-not-empty) {
+    job spawn { ngrok http $port --basic-auth $auth --domain $domain }
+  } else {
+    job spawn { ngrok http $port --basic-auth $auth }
+  }
   
   # Poll ngrok API for public URL
   for attempt in 0..30 {
