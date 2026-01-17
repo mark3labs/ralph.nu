@@ -51,6 +51,48 @@ def start-web [
   error make {msg: "opencode web failed to start after 3 seconds"}
 }
 
+# Start ngrok tunnel as background job
+def start-ngrok [
+  port: int           # Local port to forward
+  password: string    # Basic auth password
+  domain?: string     # Optional custom domain
+] {
+  print "Starting ngrok tunnel..."
+  
+  let auth = $"ralph:($password)"
+  
+  # Build ngrok command arguments
+  let args = if ($domain | is-not-empty) {
+    ["http", $port, "--basic-auth", $auth, "--domain", $domain]
+  } else {
+    ["http", $port, "--basic-auth", $auth]
+  }
+  
+  # Start ngrok as background job
+  let job_id = (job spawn { ngrok ...$args })
+  
+  # Poll ngrok API for public URL
+  for attempt in 0..30 {
+    let result = (curl -s http://localhost:4040/api/tunnels | complete)
+    if $result.exit_code == 0 {
+      try {
+        let tunnels = ($result.stdout | from json)
+        if ($tunnels.tunnels | length) > 0 {
+          let url = $tunnels.tunnels.0.public_url
+          print $"Tunnel: ($url) (auth: ralph:($password))"
+          return {job_id: $job_id, url: $url}
+        }
+      } catch {
+        # JSON parse may fail if ngrok not ready yet
+      }
+    }
+    sleep 500ms
+  }
+  
+  # If we get here, ngrok didn't start
+  error make {msg: "ngrok failed to start after 15 seconds"}
+}
+
 # Cleanup function to kill all spawned jobs
 def cleanup [
   job_ids: list<int>  # List of job IDs to kill
