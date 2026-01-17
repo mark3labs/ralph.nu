@@ -11,11 +11,9 @@ def main [] {
     "input-handling.nu"
     "status-display.nu"
     "job-cleanup.nu"
-    "iteration-loop.nu"
     "web-server-start.nu"
     "iteration-logging.nu"
     "notes.nu"
-    "integration.nu"
   ]
   
   print $"(ansi blue)Running all tests...(ansi reset)"

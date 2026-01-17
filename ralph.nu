@@ -55,69 +55,61 @@ def print-section [title: string] {
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Kill processes matching a pattern (helper to reduce duplication)
+def kill-matching [
+  pattern: string     # Pattern to match with pgrep/pkill -f
+  description: string # Human-readable description for status message
+] {
+  let result = (pgrep -f $pattern | complete)
+  if $result.exit_code == 0 and ($result.stdout | str trim | is-not-empty) {
+    print-status $"Killing existing ($description)..."
+    pkill -f $pattern
+    sleep 100ms
+  }
+}
+
+# Poll until condition is met or timeout (generic retry helper)
+# Returns: result from check_fn on success, or null on timeout
+def poll-until [
+  check_fn: closure   # Closure that returns {ok: bool, value: any}
+  --attempts: int = 30
+  --delay: duration = 100ms
+  --error-msg: string = "Operation timed out"
+] {
+  for attempt in 0..($attempts) {
+    let result = (do $check_fn)
+    if $result.ok { return $result.value }
+    sleep $delay
+  }
+  error make {msg: $error_msg}
+}
+
 # Kill any existing processes for this session
 def kill-existing [
   store_path: string  # Path to the store directory
   port: int           # Web server port
 ] {
-  # Kill any existing xs serve for this store
-  let xs_pids = (pgrep -f $"xs serve ($store_path)" | complete)
-  if $xs_pids.exit_code == 0 {
-    let pids = ($xs_pids.stdout | str trim)
-    if ($pids | is-not-empty) {
-      print-status $"Killing existing xs serve for (style value)($store_path)(style reset)..."
-      pkill -f $"xs serve ($store_path)"
-      sleep 100ms
-    }
-  }
-  
-  # Kill any existing opencode serve on this port
-  let web_pids = (pgrep -f $"opencode serve --port ($port)" | complete)
-  if $web_pids.exit_code == 0 {
-    let pids = ($web_pids.stdout | str trim)
-    if ($pids | is-not-empty) {
-      print-status $"Killing existing opencode serve on port (style value)($port)(style reset)..."
-      pkill -f $"opencode serve --port ($port)"
-      sleep 100ms
-    }
-  }
-  
-  # Kill any existing ngrok http on this port
-  let ngrok_pids = (pgrep -f $"ngrok http ($port)" | complete)
-  if $ngrok_pids.exit_code == 0 {
-    let pids = ($ngrok_pids.stdout | str trim)
-    if ($pids | is-not-empty) {
-      print-status $"Killing existing ngrok on port (style value)($port)(style reset)..."
-      pkill -f $"ngrok http ($port)"
-      sleep 100ms
-    }
-  }
+  kill-matching $"xs serve ($store_path)" $"xs serve for (style value)($store_path)(style reset)"
+  kill-matching $"opencode serve --port ($port)" $"opencode serve on port (style value)($port)(style reset)"
+  kill-matching $"ngrok http ($port)" $"ngrok on port (style value)($port)(style reset)"
 }
 
 # Start xs store server as background job
 def start-store [
   store_path: string  # Path to the store directory
 ] {
-  # Create store directory if it doesn't exist
   mkdir $store_path
-  
   print-status $"Starting xs store at (style value)($store_path)(style reset)..."
   
-  # Start xs serve as background job and capture job ID
   let job_id = (job spawn { xs serve $store_path })
   
-  # Wait for store to be ready (poll xs version)
-  for attempt in 0..30 {
-    let result = (xs version $store_path | complete)
-    if $result.exit_code == 0 {
-      print-ok "xs store is ready"
-      return $job_id
-    }
-    sleep 100ms
-  }
+  poll-until {|| 
+    let r = (xs version $store_path | complete)
+    {ok: ($r.exit_code == 0), value: $job_id}
+  } --error-msg "xs store failed to start after 3 seconds"
   
-  # If we get here, store didn't start
-  error make {msg: "xs store failed to start after 3 seconds"}
+  print-ok "xs store is ready"
+  $job_id
 }
 
 # Start opencode serve server as background job
@@ -126,21 +118,16 @@ def start-web [
 ] {
   print-status $"Starting opencode serve on port (style value)($port)(style reset)..."
   
-  # Start opencode serve as background job and capture job ID
   let job_id = (job spawn { opencode serve --port $port })
+  let url = $"http://localhost:($port)"
   
-  # Wait for web server to be ready (poll with curl)
-  for attempt in 0..30 {
-    let result = (curl -s -o /dev/null -w "%{http_code}" $"http://localhost:($port)" | complete)
-    if $result.exit_code == 0 and ($result.stdout | into int) < 500 {
-      print-ok $"opencode serve ready at (style url)http://localhost:($port)(style reset)"
-      return {job_id: $job_id, url: $"http://localhost:($port)"}
-    }
-    sleep 100ms
-  }
+  poll-until {||
+    let r = (curl -s -o /dev/null -w "%{http_code}" $url | complete)
+    {ok: ($r.exit_code == 0 and ($r.stdout | into int) < 500), value: {job_id: $job_id, url: $url}}
+  } --error-msg "opencode serve failed to start after 3 seconds"
   
-  # If we get here, web server didn't start
-  error make {msg: "opencode serve failed to start after 3 seconds"}
+  print-ok $"opencode serve ready at (style url)($url)(style reset)"
+  {job_id: $job_id, url: $url}
 }
 
 # Start ngrok tunnel as background job
@@ -149,7 +136,6 @@ def start-ngrok [
   password: string    # Basic auth password
   domain?: string     # Optional custom domain
 ] {
-  # Validate password length (ngrok requires 8-128 characters)
   let pw_len = ($password | str length)
   if $pw_len < 8 or $pw_len > 128 {
     error make {msg: $"ngrok password must be 8-128 characters, got ($pw_len)"}
@@ -158,8 +144,6 @@ def start-ngrok [
   print-status "Starting ngrok tunnel..."
   
   let auth = $"ralph:($password)"
-  
-  # Start ngrok as background job
   let port_str = ($port | into string)
   let job_id = if ($domain | is-not-empty) {
     job spawn { ngrok http $port_str --basic-auth $auth --domain $domain }
@@ -167,25 +151,24 @@ def start-ngrok [
     job spawn { ngrok http $port_str --basic-auth $auth }
   }
   
-  # Poll ngrok API for public URL
-  for attempt in 0..30 {
+  let result = (poll-until {||
     try {
       let response = (http get http://localhost:4040/api/tunnels)
-      if ($response.tunnels? | default [] | is-not-empty) {
-        let url = $response.tunnels.0.public_url
-        print-ok $"ngrok tunnel ready"
-        print $"     (style url)($url)(style reset)"
-        print $"     (style dim)auth: (style warn)ralph:($password)(style reset)"
-        return {job_id: $job_id, url: $url}
+      let tunnels = ($response.tunnels? | default [])
+      if ($tunnels | is-not-empty) {
+        {ok: true, value: {job_id: $job_id, url: $tunnels.0.public_url}}
+      } else {
+        {ok: false, value: null}
       }
     } catch {
-      # Request may fail if ngrok not ready yet
+      {ok: false, value: null}
     }
-    sleep 500ms
-  }
+  } --delay 500ms --error-msg "ngrok failed to start after 15 seconds")
   
-  # If we get here, ngrok didn't start
-  error make {msg: "ngrok failed to start after 15 seconds"}
+  print-ok "ngrok tunnel ready"
+  print $"     (style url)($result.url)(style reset)"
+  print $"     (style dim)auth: (style warn)ralph:($password)(style reset)"
+  $result
 }
 
 # Cleanup function to kill all spawned jobs
@@ -201,6 +184,14 @@ def cleanup [
     } catch {
       # Job may have already exited - ignore errors
     }
+  }
+}
+
+# Cleanup all currently running jobs
+def cleanup-all [] {
+  let jobs = (job list | get id)
+  if ($jobs | is-not-empty) {
+    cleanup $jobs
   }
 }
 
@@ -318,20 +309,22 @@ def get-note-state [
   }
 }
 
+# Note type ordering and colors
+const NOTE_TYPES = ["stuck", "learning", "tip", "decision"]
+const NOTE_COLORS = {stuck: "red", learning: "green", tip: "cyan", decision: "yellow"}
+
 # Format notes for prompt injection
 # Only shows notes from previous iterations (not current)
 def format-notes-for-prompt [notes: list, current_iteration: int] {
-  # Filter to notes from previous iterations only
   let prev_notes = ($notes | where {|n| 
     $n.iteration != null and $n.iteration < $current_iteration
   })
-  
   if ($prev_notes | is-empty) { return "" }
   
   let grouped = ($prev_notes | group-by type)
   mut lines = ["## Notes from Previous Iterations"]
   
-  for type in ["stuck", "learning", "tip", "decision"] {
+  for type in $NOTE_TYPES {
     let type_notes = ($grouped | get -o $type | default [])
     if ($type_notes | length) > 0 {
       $lines = ($lines | append $"($type | str upcase):")
@@ -340,7 +333,6 @@ def format-notes-for-prompt [notes: list, current_iteration: int] {
       }
     }
   }
-  
   $lines | str join "\n"
 }
 
@@ -355,16 +347,10 @@ def show-session-notes [
   let grouped = ($notes | group-by type)
   print $"\n(style section)SESSION NOTES(style reset)"
   
-  for type in ["stuck", "learning", "tip", "decision"] {
+  for type in $NOTE_TYPES {
     let type_notes = ($grouped | get -o $type | default [])
     if ($type_notes | length) > 0 {
-      let color = match $type {
-        "stuck" => "red"
-        "learning" => "green"  
-        "tip" => "cyan"
-        "decision" => "yellow"
-        _ => "white"
-      }
+      let color = ($NOTE_COLORS | get $type)
       print $"\n(ansi $color)($type | str upcase)(ansi reset)"
       for note in $type_notes {
         let iter = if ($note.iteration != null) { $"[#($note.iteration)]" } else { "" }
@@ -464,24 +450,13 @@ def show-iterations [
 def format-task-state [state: record] {
   mut lines = []
   
-  if ($state.in_progress | length) > 0 {
-    $lines = ($lines | append "IN PROGRESS:")
-    for task in $state.in_progress {
-      $lines = ($lines | append $"  - [($task.id)] ($task.content)")
-    }
-  }
-  
-  if ($state.blocked | length) > 0 {
-    $lines = ($lines | append "BLOCKED:")
-    for task in $state.blocked {
-      $lines = ($lines | append $"  - [($task.id)] ($task.content)")
-    }
-  }
-  
-  if ($state.remaining | length) > 0 {
-    $lines = ($lines | append "REMAINING:")
-    for task in $state.remaining {
-      $lines = ($lines | append $"  - [($task.id)] ($task.content)")
+  for category in ["in_progress", "blocked", "remaining"] {
+    let tasks = ($state | get $category)
+    if ($tasks | length) > 0 {
+      $lines = ($lines | append $"($category | str upcase | str replace '_' ' '):")
+      for task in $tasks {
+        $lines = ($lines | append $"  - [($task.id)] ($task.content)")
+      }
     }
   }
   
@@ -823,14 +798,6 @@ def main [
   print-kv "Store" $store
   print-kv "Port" ($port | into string)
   print ""
-  
-  # Helper to cleanup all jobs
-  def cleanup-all [] {
-    let jobs = (job list | get id)
-    if ($jobs | is-not-empty) {
-      cleanup $jobs
-    }
-  }
   
   # Run main logic with cleanup handling
   try {
