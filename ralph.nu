@@ -468,7 +468,60 @@ export const task_list = tool({
   description: "Get current task list grouped by status. Shows task IDs needed for task_status.",
   args: {},
   async execute() {
-    const cmd = `xs cat ${STORE_PATH} | from json --objects | where topic == "${TOPIC}" | each {|f| {id: $f.id, status: $f.meta.status, content: (xs cas ${STORE_PATH} $f.hash)}} | group-by status | to json`
+    // Use the same reduce-based state machine as get-task-state in ralph.nu
+    const cmd = `
+      let topic = "${TOPIC}"
+      let frames = (xs cat ${STORE_PATH} | from json --objects | where topic == $topic)
+      
+      if ($frames | is-empty) {
+        echo "No tasks yet"
+        exit 0
+      }
+      
+      # Build state machine using reduce
+      let tasks = ($frames | reduce -f {} {|frame, state|
+        let action = ($frame.meta.action? | default "add")
+        
+        if $action == "add" {
+          let content = (xs cas ${STORE_PATH} $frame.hash)
+          let status = ($frame.meta.status? | default "remaining")
+          let iteration = ($frame.meta.iteration? | default null)
+          $state | upsert $frame.id {
+            id: $frame.id
+            content: $content
+            status: $status
+            iteration: $iteration
+          }
+        } else if $action == "status" {
+          let target_id = $frame.meta.id
+          let new_status = $frame.meta.status
+          let iteration = ($frame.meta.iteration? | default null)
+          if ($target_id in $state) {
+            $state | upsert $target_id {|task|
+              $task | get $target_id | upsert status $new_status | upsert iteration $iteration
+            }
+          } else {
+            $state
+          }
+        } else {
+          $state
+        }
+      })
+      
+      # Convert to grouped lists
+      let task_list = ($tasks | values)
+      let grouped = if ($task_list | is-empty) { {} } else { $task_list | group-by status }
+      
+      # Return formatted output matching show-notes display
+      let result = {
+        completed: ($grouped | get -o completed | default [])
+        in_progress: ($grouped | get -o in_progress | default [])
+        blocked: ($grouped | get -o blocked | default [])
+        remaining: ($grouped | get -o remaining | default [])
+      }
+      
+      $result | to json
+    `
     const result = await Bun.$`nu -c ${cmd}`.text()
     return result.trim() || "No tasks yet"
   },
