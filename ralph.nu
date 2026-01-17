@@ -11,15 +11,15 @@ def start-store [
   
   print $"Starting xs store at ($store_path)..."
   
-  # Start xs serve as background job
-  job spawn { xs serve $store_path }
+  # Start xs serve as background job and capture job ID
+  let job_id = (job spawn { xs serve $store_path })
   
   # Wait for store to be ready (poll xs version)
   for attempt in 0..30 {
     let result = (xs version $store_path | complete)
     if $result.exit_code == 0 {
       print "xs store is ready!"
-      return
+      return $job_id
     }
     sleep 100ms
   }
@@ -34,21 +34,37 @@ def start-web [
 ] {
   print $"Starting opencode web on port ($port)..."
   
-  # Start opencode web as background job
-  job spawn { opencode web --port $port }
+  # Start opencode web as background job and capture job ID
+  let job_id = (job spawn { opencode web --port $port })
   
   # Wait for web server to be ready (poll with curl)
   for attempt in 0..30 {
     let result = (curl -s -o /dev/null -w "%{http_code}" $"http://localhost:($port)" | complete)
     if $result.exit_code == 0 and ($result.stdout | into int) < 500 {
       print $"opencode web is ready at http://localhost:($port)"
-      return $"http://localhost:($port)"
+      return {job_id: $job_id, url: $"http://localhost:($port)"}
     }
     sleep 100ms
   }
   
   # If we get here, web server didn't start
   error make {msg: "opencode web failed to start after 3 seconds"}
+}
+
+# Cleanup function to kill all spawned jobs
+def cleanup [
+  job_ids: list<int>  # List of job IDs to kill
+] {
+  print "Cleaning up background jobs..."
+  
+  for job_id in $job_ids {
+    try {
+      job kill $job_id
+      print $"Killed job ($job_id)"
+    } catch {
+      # Job may have already exited - ignore errors
+    }
+  }
 }
 
 # Main entry point

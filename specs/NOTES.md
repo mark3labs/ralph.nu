@@ -21,6 +21,16 @@
   - Returns server URL (http://localhost:{port}) for --attach usage
   - Created test-ralph-web.nu to validate functionality
   - Tested successfully: web server starts on port 4097, responds with HTTP 200, and cleans up properly
+  - Updated to return both job_id and url as a record for tracking
+
+- Task 4: Implement cleanup handler (all subtasks)
+  - Created `cleanup` function that accepts list of job IDs
+  - Function iterates through job IDs and kills each with job kill
+  - Uses try/catch to ignore errors for jobs that may have already exited
+  - Updated start-store to return job_id for tracking
+  - Updated start-web to return {job_id, url} record for tracking
+  - Created and ran test-ralph-cleanup.nu to verify functionality
+  - Tested successfully: both store and web jobs are killed cleanly
 
 ## In Progress
 (none)
@@ -29,10 +39,6 @@
 (none)
 
 ## Remaining
-- Task 4: Implement cleanup handler
-  - Create `cleanup` function to kill all spawned jobs
-  - Track job IDs from spawn calls
-  - Wire into try/catch for interrupt handling
 - Task 5: Implement iteration logging
   - Create `log-iteration-start` function: xs append ralph.iteration
   - Create `log-iteration-complete` function: xs append ralph.iteration

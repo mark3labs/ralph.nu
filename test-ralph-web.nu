@@ -3,38 +3,19 @@
 # Simple test for start-web function
 # This test verifies that start-web can start opencode web and poll it successfully
 
-# Inline copy of start-web for testing
-def start-web [
-  port: int  # Port for the web server
-] {
-  print $"Starting opencode web on port ($port)..."
-  
-  # Start opencode web as background job
-  job spawn { opencode web --port $port }
-  
-  # Wait for web server to be ready (poll with curl)
-  for attempt in 0..30 {
-    let result = (curl -s -o /dev/null -w "%{http_code}" $"http://localhost:($port)" | complete)
-    if $result.exit_code == 0 and ($result.stdout | into int) < 500 {
-      print $"opencode web is ready at http://localhost:($port)"
-      return $"http://localhost:($port)"
-    }
-    sleep 100ms
-  }
-  
-  # If we get here, web server didn't start
-  error make {msg: "opencode web failed to start after 3 seconds"}
-}
+# Source ralph.nu to get the actual start-web function
+source ralph.nu
 
 print "Testing start-web function..."
 
 try {
   # Start the web server
-  let url = (start-web 4097)
-  print $"✓ Web server started successfully: ($url)"
+  let result = (start-web 4097)
+  print $"✓ Web server started successfully: ($result.url)"
+  print $"✓ Job ID: ($result.job_id)"
   
   # Verify we can access it
-  let response = (curl -s -o /dev/null -w "%{http_code}" $url | complete)
+  let response = (curl -s -o /dev/null -w "%{http_code}" $result.url | complete)
   if $response.exit_code == 0 {
     print $"✓ Web server responds with HTTP ($response.stdout)"
   } else {
