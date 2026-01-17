@@ -231,10 +231,14 @@ def main [
   --iterations (-i): int = 0                                # Number of iterations (0 = infinite)
   --port: int = 4096                                        # opencode web port
   --store: string = "./.ralph/store"                        # xs store path
+  --ngrok: string = ""                                      # Enable ngrok tunnel with this password
+  --ngrok-domain: string = ""                               # Custom ngrok domain (optional)
 ] {
-  # Validate required parameter - return silently if empty (when sourced for testing)
+  # Validate required parameter
   if ($name | is-empty) {
-    return
+    print "Error: --name (-n) is required"
+    print "Usage: ralph.nu --name <session-name> [--spec <path>] [--iterations <n>]"
+    exit 1
   }
 
   print "ralph.nu starting..."
@@ -297,12 +301,16 @@ def main [
       log-iteration-start $store $name $n
       
       # Run opencode attached to web server
+      print $"DEBUG: Running opencode run --attach ($web_result.url) --title '($name) - Iteration #($n)' -m ($model)"
       let opencode_result = (
-        opencode run --attach $web_result.url --title $"($name) - Iteration #($n)" $final_prompt
+        opencode run --attach $web_result.url --title $"($name) - Iteration #($n)" -m $model $final_prompt
         | complete
       )
       
       # Determine status based on exit code
+      print $"DEBUG: exit_code=($opencode_result.exit_code)"
+      print $"DEBUG: stdout=($opencode_result.stdout | str substring 0..500)"
+      print $"DEBUG: stderr=($opencode_result.stderr | str substring 0..500)"
       let status = if $opencode_result.exit_code == 0 { "success" } else { "failure" }
       
       # Log iteration complete
