@@ -1,44 +1,47 @@
 #!/usr/bin/env nu
 
-# Simple test for start-web function
-# This test verifies that start-web can start opencode web and poll it successfully
+# Test suite for start-web function
+# Verifies that start-web can start opencode web and poll it successfully
+
+use std/assert
+use mod.nu [run-tests]
 
 # Source ralph.nu to get the actual start-web function
 source ../ralph.nu
 
-print "Testing start-web function..."
+def "test start-web starts server and returns url" [] {
+  let port = 4097
+  let result = (start-web $port)
+  
+  # Verify result has expected fields
+  assert ("url" in $result)
+  assert ("job_id" in $result)
+  
+  # Verify URL contains the port
+  assert str contains $result.url $"($port)"
+  
+  # Cleanup
+  try {
+    job kill $result.job_id
+  } catch {
+    # Job may have already exited
+  }
+}
 
-try {
-  # Start the web server
-  let result = (start-web 4097)
-  print $"✓ Web server started successfully: ($result.url)"
-  print $"✓ Job ID: ($result.job_id)"
+def "test start-web server responds to http requests" [] {
+  let port = 4098
+  let result = (start-web $port)
   
   # Verify we can access it
   let response = (curl -s -o /dev/null -w "%{http_code}" $result.url | complete)
-  if $response.exit_code == 0 {
-    print $"✓ Web server responds with HTTP ($response.stdout)"
-  } else {
-    print "✗ Failed to get response from web server"
-    exit 1
+  assert equal $response.exit_code 0 "curl should succeed"
+  
+  # Cleanup
+  try {
+    job kill $result.job_id
+  } catch {
+    # Job may have already exited
   }
-  
-  # Kill the job
-  let jobs = (job list)
-  for j in $jobs {
-    job kill $j.id
-    print $"✓ Killed job ($j.id)"
-  }
-  
-  print "\n✓ All tests passed!"
-} catch { |err|
-  print $"✗ Test failed: ($err.msg)"
-  
-  # Cleanup jobs on failure
-  let jobs = (job list)
-  for j in $jobs {
-    job kill $j.id
-  }
-  
-  exit 1
 }
+
+run-tests
