@@ -231,7 +231,7 @@ def log-iteration-complete [
   echo "" | xs append $store_path $topic --meta $meta
 }
 
-# Compute current task state from append-only log using generate pattern
+# Compute current task state from append-only log using reduce pattern
 # Events: add (creates task), status (changes task status by ID)
 # Returns record with tasks grouped by status
 def get-task-state [
@@ -247,8 +247,8 @@ def get-task-state [
     return {completed: [], in_progress: [], blocked: [], remaining: []}
   }
   
-  # Use generate to build state machine - tasks keyed by ID
-  let tasks = ($frames | generate {|frame, state = {}|
+  # Use reduce to build state machine - tasks keyed by ID
+  let tasks = ($frames | reduce -f {} {|frame, state|
     let action = ($frame.meta.action? | default "add")
     
     match $action {
@@ -262,7 +262,7 @@ def get-task-state [
           content: $content
           status: $status
           iteration: $iteration
-        } | {next: $in}
+        }
       }
       "status" => {
         # Status change: update existing task by ID
@@ -272,14 +272,14 @@ def get-task-state [
         if ($target_id in $state) {
           $state | upsert $target_id {|task|
             $task | get $target_id | upsert status $new_status | upsert iteration $iteration
-          } | {next: $in}
+          }
         } else {
-          {next: $state}
+          $state
         }
       }
-      _ => {next: $state}
+      _ => $state
     }
-  } | last | default {})
+  })
   
   # Convert from {id: task} record to grouped lists by status
   let task_list = ($tasks | values)
@@ -294,7 +294,7 @@ def get-task-state [
   }
 }
 
-# Show tasks using computed task state (ID-based, generate pattern)
+# Show tasks using computed task state (ID-based, reduce pattern)
 def show-notes [
   store_path: string  # Path to the store directory
   name: string        # Session name
