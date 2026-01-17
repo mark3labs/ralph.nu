@@ -82,6 +82,24 @@ What the feature does.
 - [ ] Write tests
 ```
 
+## Testing
+
+Run the test suite:
+
+```bash
+# Run all tests
+nu tests/run-all.nu
+
+# Run individual test file
+nu tests/prompt-template.nu
+```
+
+The test suite uses Nushell's `std/assert` module and includes:
+- Unit tests for core functions (prompt building, input handling, status display, etc.)
+- Integration tests for full workflow scenarios
+
+Test files follow the `def "test ..."` naming convention. See `tests/mod.nu` for test framework utilities.
+
 ## Web UI
 
 Access the opencode serve UI at `http://localhost:4096` (or your ngrok URL).
