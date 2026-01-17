@@ -416,6 +416,78 @@ def format-task-state [state: record] {
   }
 }
 
+# Generate custom tool definitions for opencode
+def generate-tools [
+  store_path: string  # Path to the store directory
+  name: string        # Session name
+  iteration: int      # Current iteration number
+  pid: int            # Parent process ID for termination
+] {
+  let abs_store = ($store_path | path expand)
+  
+  # Create tool directory
+  mkdir .opencode/tool
+  
+  # Build TypeScript content using single quotes (no interpolation) + string concatenation
+  let content = (
+    'import { tool } from "@opencode-ai/plugin"
+
+const STORE_PATH = "' + $abs_store + '"
+const SESSION_NAME = "' + $name + '"
+const ITERATION = ' + ($iteration | into string) + '
+const PARENT_PID = ' + ($pid | into string) + '
+const TOPIC = `ralph.${SESSION_NAME}.task`
+
+export const task_add = tool({
+  description: "Add a new task to the ralph session task list",
+  args: {
+    content: tool.schema.string().describe("Task description"),
+    status: tool.schema.enum(["remaining", "blocked"]).default("remaining").describe("Initial status"),
+  },
+  async execute(args) {
+    const meta = JSON.stringify({ action: "add", status: args.status })
+    const result = await Bun.$`echo ${args.content} | xs append ${STORE_PATH} ${TOPIC} --meta ${meta}`.text()
+    return result.trim()
+  },
+})
+
+export const task_status = tool({
+  description: "Update a task status by ID. Use IDs from task_list output.",
+  args: {
+    id: tool.schema.string().describe("Task ID (full or 8+ char prefix)"),
+    status: tool.schema.enum(["in_progress", "completed", "blocked"]).describe("New status"),
+  },
+  async execute(args) {
+    const meta = JSON.stringify({ action: "status", id: args.id, status: args.status, iteration: ITERATION })
+    const result = await Bun.$`xs append ${STORE_PATH} ${TOPIC} --meta ${meta}`.text()
+    return `Task ${args.id} marked as ${args.status}`
+  },
+})
+
+export const task_list = tool({
+  description: "Get current task list grouped by status. Shows task IDs needed for task_status.",
+  args: {},
+  async execute() {
+    const cmd = `xs cat ${STORE_PATH} | from json --objects | where topic == "${TOPIC}" | each {|f| {id: $f.id, status: $f.meta.status, content: (xs cas ${STORE_PATH} $f.hash)}} | group-by status | to json`
+    const result = await Bun.$`nu -c ${cmd}`.text()
+    return result.trim() || "No tasks yet"
+  },
+})
+
+export const session_complete = tool({
+  description: "Signal that ALL tasks are complete and terminate the ralph session. Only call when every task is done.",
+  args: {},
+  async execute() {
+    await Bun.$`kill -TERM ${PARENT_PID}`
+    return "Session terminated"
+  },
+})
+'
+  )
+  
+  $content | save -f .opencode/tool/ralph.ts
+}
+
 # Build prompt template with task state injected
 def build-prompt [
   spec_content: string  # Content of the spec file
@@ -434,27 +506,22 @@ def build-prompt [
 ## Current Task State
 ($state_text)
 
-## Task Commands \(xs CLI\)
-Topic: ralph.($name).task
-
-# Add new task \(returns frame with ID\)
-echo \"Task description\" | xs append ($store_path) ralph.($name).task --meta '{\"action\":\"add\",\"status\":\"remaining\"}'
-
-# Change task status \(use ID from task list above\)
-xs append ($store_path) ralph.($name).task --meta '{\"action\":\"status\",\"id\":\"<TASK_ID>\",\"status\":\"in_progress\",\"iteration\":($iteration)}'
-xs append ($store_path) ralph.($name).task --meta '{\"action\":\"status\",\"id\":\"<TASK_ID>\",\"status\":\"completed\",\"iteration\":($iteration)}'
-xs append ($store_path) ralph.($name).task --meta '{\"action\":\"status\",\"id\":\"<TASK_ID>\",\"status\":\"blocked\",\"iteration\":($iteration)}'
+## Available Tools
+- task_add\(content, status?\) - Add new task
+- task_status\(id, status\) - Update task \(use IDs from list above\)
+- task_list\(\) - Refresh task list
+- session_complete\(\) - Call when ALL tasks done
 
 ## Instructions
-1. Pick ONE task from REMAINING or IN PROGRESS \(note its ID\)
-2. Mark it in_progress by ID, complete the work
-3. Mark it completed by ID
-4. Git commit with clear message
-5. If ALL tasks done: pkill -P ($pid)
+1. Pick ONE task from REMAINING or IN PROGRESS
+2. Call task_status\(id, \"in_progress\"\)
+3. Complete the work
+4. Call task_status\(id, \"completed\"\)
+5. Git commit with clear message
+6. If ALL tasks done: call session_complete\(\)
 
 ## Rules
 - ONE task per iteration
-- Use task IDs from the list above \(in square brackets\)
 - Run tests before commit
 "
   
@@ -556,6 +623,9 @@ def main [
       print $"\n(style header)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━(style reset)"
       print $"(style header)  ($name)(style reset) (style dim)·(style reset) (style value)Iteration #($n)(style reset)"
       print $"(style header)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━(style reset)\n"
+      
+      # Generate custom tools for this iteration
+      generate-tools $store $name $n $parent_pid
       
       # Get current task state for this iteration
       let task_state = (get-task-state $store $name)
