@@ -342,8 +342,38 @@ def format-notes-for-prompt [notes: list, current_iteration: int] {
   $lines | str join "\n"
 }
 
+# Show session notes grouped by type
+def show-session-notes [
+  store_path: string  # Path to the store directory
+  name: string        # Session name
+] {
+  let notes = (get-note-state $store_path $name)
+  if ($notes | is-empty) { return }
+  
+  let grouped = ($notes | group-by type)
+  print $"\n(style section)SESSION NOTES(style reset)"
+  
+  for type in ["stuck", "learning", "tip", "decision"] {
+    let type_notes = ($grouped | get -o $type | default [])
+    if ($type_notes | length) > 0 {
+      let color = match $type {
+        "stuck" => "red"
+        "learning" => "green"  
+        "tip" => "cyan"
+        "decision" => "yellow"
+        _ => "white"
+      }
+      print $"\n(ansi $color)($type | str upcase)(ansi reset)"
+      for note in $type_notes {
+        let iter = if ($note.iteration != null) { $"[#($note.iteration)]" } else { "" }
+        print $"  ($iter) ($note.content)"
+      }
+    }
+  }
+}
+
 # Show tasks using computed task state (ID-based, reduce pattern)
-def show-notes [
+def show-tasks [
   store_path: string  # Path to the store directory
   name: string        # Session name
 ] {
@@ -558,7 +588,7 @@ export const task_list = tool({
       let task_list = ($tasks | values)
       let grouped = if ($task_list | is-empty) { {} } else { $task_list | group-by status }
       
-      # Return formatted output matching show-notes display
+      # Return formatted output matching show-tasks display
       let result = {
         completed: ($grouped | get -o completed | default [])
         in_progress: ($grouped | get -o in_progress | default [])
@@ -684,7 +714,8 @@ def main [
     # Display current state (if any previous sessions exist)
     try {
       show-iterations $store $name
-      show-notes $store $name
+      show-session-notes $store $name
+      show-tasks $store $name
     } catch {
       # Store may not have any data yet - this is fine for first run
     }
