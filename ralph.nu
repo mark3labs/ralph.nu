@@ -450,8 +450,20 @@ def main [
       null
     }
     
+    # Get last iteration from store to enable continuation
+    let last_iter = try {
+      xs cat $store | from json --objects 
+        | where topic == $"ralph.($name).iteration" 
+        | get meta.n 
+        | math max
+    } catch { 0 }
+    
+    if $last_iter > 0 {
+      print-status $"Continuing from iteration #($last_iter)"
+    }
+    
     # Main iteration loop
-    mut n = 1
+    mut n = $last_iter + 1
     loop {
       print $"\n(style header)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━(style reset)"
       print $"(style header)  ($name)(style reset) (style dim)·(style reset) (style value)Iteration #($n)(style reset)"
