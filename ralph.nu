@@ -265,13 +265,15 @@ def get-task-state [
         }
       }
       "status" => {
-        # Status change: update existing task by ID
+        # Status change: update existing task by ID (supports prefix matching)
         let target_id = $frame.meta.id
         let new_status = $frame.meta.status
         let iteration = ($frame.meta.iteration? | default null)
-        if ($target_id in $state) {
-          $state | upsert $target_id {|task|
-            $task | get $target_id | upsert status $new_status | upsert iteration $iteration
+        # Find task by exact match or prefix (8+ chars)
+        let matching_id = ($state | columns | where {|id| $id == $target_id or ($id | str starts-with $target_id)} | first | default null)
+        if ($matching_id | is-not-empty) {
+          $state | upsert $matching_id {|task|
+            $task | get $matching_id | upsert status $new_status | upsert iteration $iteration
           }
         } else {
           $state
@@ -496,9 +498,6 @@ def format-task-state [state: record] {
 
 # Generate custom tool definitions for opencode
 def generate-tools [
-  store_path: string  # Path to the store directory
-  name: string        # Session name
-  iteration: int      # Current iteration number
   --force             # Overwrite existing tools
 ] {
   let tool_path = ".opencode/tool/ralph.ts"
@@ -508,28 +507,16 @@ def generate-tools [
     return
   }
   
-  let abs_store = ($store_path | path expand)
-  
   # Create tool directory
   mkdir .opencode/tool
   
-  # Build TypeScript content using single quotes (no interpolation) + string concatenation
-  let content = (
-    'import { tool } from "@opencode-ai/plugin"
+  # Build TypeScript content
+  # STORE is constant (.ralph/store relative to project root)
+  # All tools take session_name as argument - agent gets it from prompt context
+  let content = '
+import { tool } from "@opencode-ai/plugin"
 
-const STORE_PATH = "' + $abs_store + '"
-const SESSION_NAME = "' + $name + '"
-const TOPIC = `ralph.${SESSION_NAME}.task`
-
-// Check if xs store is healthy
-async function checkStoreHealth(): Promise<boolean> {
-  try {
-    const result = await Bun.$`xs version ${STORE_PATH}`.text()
-    return result.includes("version")
-  } catch {
-    return false
-  }
-}
+const STORE = ".ralph/store"
 
 // Retry helper with exponential backoff
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
@@ -547,9 +534,9 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   throw lastError
 }
 
-// Get current iteration from store (latest iteration start frame)
-async function getCurrentIteration(): Promise<number> {
-  const cmd = `xs cat ${STORE_PATH} | from json --objects | where topic == "ralph.${SESSION_NAME}.iteration" | where {|f| $f.meta.action? == "start"} | last | get meta.n`
+// Get current iteration from store
+async function getCurrentIteration(session: string): Promise<number> {
+  const cmd = `xs cat ${STORE} | from json --objects | where topic == "ralph.${session}.iteration" | where {|f| $f.meta.action? == "start"} | last | get meta.n`
   try {
     const result = await Bun.$`nu -c ${cmd}`.text()
     return parseInt(result.trim()) || 1
@@ -561,18 +548,22 @@ async function getCurrentIteration(): Promise<number> {
 export const task_add = tool({
   description: "Add a new task to the ralph session task list",
   args: {
+    session_name: tool.schema.string().describe("Session name from Context section"),
     content: tool.schema.string().describe("Task description"),
     status: tool.schema.enum(["remaining", "blocked"]).default("remaining").describe("Initial status"),
   },
   async execute(args) {
+    const session = args.session_name
+    if (!session?.trim()) return "ERROR: session_name required"
+    const topic = `ralph.${session}.task`
     try {
       const meta = JSON.stringify({ action: "add", status: args.status })
       const result = await withRetry(async () => {
-        return await Bun.$`echo ${args.content} | xs append ${STORE_PATH} ${TOPIC} --meta ${meta}`.text()
+        return await Bun.$`echo ${args.content} | xs append ${STORE} ${topic} --meta ${meta}`.text()
       })
       return result.trim()
     } catch (e) {
-      return `ERROR: Failed to add task: ${(e as Error).message}`
+      return `ERROR: ${(e as Error).message}`
     }
   },
 })
@@ -580,43 +571,50 @@ export const task_add = tool({
 export const task_status = tool({
   description: "Update a task status by ID. Use IDs from task_list output.",
   args: {
+    session_name: tool.schema.string().describe("Session name from Context section"),
     id: tool.schema.string().describe("Task ID (full or 8+ char prefix)"),
     status: tool.schema.enum(["in_progress", "completed", "blocked"]).describe("New status"),
   },
   async execute(args) {
+    const session = args.session_name
+    if (!session?.trim()) return "ERROR: session_name required"
+    const topic = `ralph.${session}.task`
     try {
-      const iteration = await getCurrentIteration()
+      const iteration = await getCurrentIteration(session)
       const meta = JSON.stringify({ action: "status", id: args.id, status: args.status, iteration })
       await withRetry(async () => {
-        await Bun.$`xs append ${STORE_PATH} ${TOPIC} --meta ${meta}`.text()
+        await Bun.$`xs append ${STORE} ${topic} --meta ${meta}`.text()
       })
       return `Task ${args.id} marked as ${args.status}`
     } catch (e) {
-      return `ERROR: Failed to update task status: ${(e as Error).message}`
+      return `ERROR: ${(e as Error).message}`
     }
   },
 })
 
 export const task_list = tool({
   description: "Get current task list grouped by status. Shows task IDs needed for task_status.",
-  args: {},
-  async execute() {
-    // Use the same reduce-based state machine as get-task-state in ralph.nu
+  args: {
+    session_name: tool.schema.string().describe("Session name from Context section"),
+  },
+  async execute(args) {
+    const session = args.session_name
+    if (!session?.trim()) return "ERROR: session_name required"
+    const topic = `ralph.${session}.task`
     const cmd = `
-      let topic = "${TOPIC}"
-      let frames = (xs cat ${STORE_PATH} | from json --objects | where topic == $topic)
+      let topic = "${topic}"
+      let frames = (xs cat ${STORE} | from json --objects | where topic == $topic)
       
       if ($frames | is-empty) {
         echo "No tasks yet"
         exit 0
       }
       
-      # Build state machine using reduce
       let tasks = ($frames | reduce -f {} {|frame, state|
         let action = ($frame.meta.action? | default "add")
         
         if $action == "add" {
-          let content = (xs cas ${STORE_PATH} $frame.hash)
+          let content = (xs cas ${STORE} $frame.hash)
           let status = ($frame.meta.status? | default "remaining")
           let iteration = ($frame.meta.iteration? | default null)
           $state | upsert $frame.id {
@@ -629,9 +627,11 @@ export const task_list = tool({
           let target_id = $frame.meta.id
           let new_status = $frame.meta.status
           let iteration = ($frame.meta.iteration? | default null)
-          if ($target_id in $state) {
-            $state | upsert $target_id {|task|
-              $task | get $target_id | upsert status $new_status | upsert iteration $iteration
+          # Find task by exact match or prefix (8+ chars)
+          let matching_id = ($state | columns | where {|id| $id == $target_id or ($id | str starts-with $target_id)} | first | default null)
+          if ($matching_id | is-not-empty) {
+            $state | upsert $matching_id {|task|
+              $task | get $matching_id | upsert status $new_status | upsert iteration $iteration
             }
           } else {
             $state
@@ -641,11 +641,9 @@ export const task_list = tool({
         }
       })
       
-      # Convert to grouped lists
       let task_list = ($tasks | values)
       let grouped = if ($task_list | is-empty) { {} } else { $task_list | group-by status }
       
-      # Return formatted output matching show-tasks display
       let result = {
         completed: ($grouped | get -o completed | default [])
         in_progress: ($grouped | get -o in_progress | default [])
@@ -663,46 +661,22 @@ export const task_list = tool({
 export const session_complete = tool({
   description: "Signal that ALL tasks are complete and terminate the ralph session. Only call when every task is done.",
   args: {
-    session_name: tool.schema.string().min(1).describe("Session name (from Context section of prompt) - REQUIRED"),
+    session_name: tool.schema.string().describe("Session name from Context section"),
   },
   async execute(args) {
-    console.log(`[DEBUG session_complete] Starting - session_name: ${args.session_name}`)
-    console.log(`[DEBUG session_complete] STORE_PATH: ${STORE_PATH}`)
-    console.log(`[DEBUG session_complete] SESSION_NAME: ${SESSION_NAME}`)
-    
-    // Validate required params
-    if (!args.session_name || args.session_name.trim() === "") {
-      const err = "ERROR: session_name is required. Use the session name from the Context section of the prompt."
-      console.log(`[DEBUG session_complete] ${err}`)
-      return err
-    }
-    
-    // Health check first
-    console.log(`[DEBUG session_complete] Checking store health...`)
-    const healthy = await checkStoreHealth()
-    console.log(`[DEBUG session_complete] Store healthy: ${healthy}`)
-    if (!healthy) {
-      return "ERROR: xs store not responding. The ralph session may need to be restarted."
-    }
-    
-    console.log(`[DEBUG session_complete] Getting current iteration...`)
-    const iteration = await getCurrentIteration()
-    console.log(`[DEBUG session_complete] Current iteration: ${iteration}`)
-    const meta = JSON.stringify({ action: "session_complete", iteration })
-    console.log(`[DEBUG session_complete] Meta: ${meta}`)
+    const session = args.session_name
+    if (!session?.trim()) return "ERROR: session_name required"
     
     try {
-      console.log(`[DEBUG session_complete] Attempting xs append...`)
+      // Write timestamp-based marker - ralph.nu will check for any session_complete frame
+      const meta = JSON.stringify({ action: "session_complete", ts: Date.now() })
+      const topic = `ralph.${session}.control`
       await withRetry(async () => {
-        const cmd = `echo "complete" | xs append ${STORE_PATH} ralph.${args.session_name}.control --meta '${meta}'`
-        console.log(`[DEBUG session_complete] Command: ${cmd}`)
-        await Bun.$`echo "complete" | xs append ${STORE_PATH} ralph.${args.session_name}.control --meta ${meta}`.text()
+        await Bun.$`echo "complete" | xs append ${STORE} ${topic} --meta ${meta}`.text()
       })
-      console.log(`[DEBUG session_complete] Success!`)
-      return `Session marked complete (iteration ${iteration}) - will exit after this iteration`
+      return `Session "${session}" marked complete`
     } catch (e) {
-      console.log(`[DEBUG session_complete] Error: ${(e as Error).message}`)
-      return `ERROR: Failed to signal session complete after 3 retries: ${(e as Error).message}`
+      return `ERROR: ${(e as Error).message}`
     }
   },
 })
@@ -710,20 +684,24 @@ export const session_complete = tool({
 export const note_add = tool({
   description: "Add a note for future iterations (learnings, tips, blockers, decisions)",
   args: {
-    content: tool.schema.string().describe("Note content - be specific and actionable"),
+    session_name: tool.schema.string().describe("Session name from Context section"),
+    content: tool.schema.string().describe("Note content"),
     type: tool.schema.enum(["learning", "stuck", "tip", "decision"]).describe("Note category"),
   },
   async execute(args) {
+    const session = args.session_name
+    if (!session?.trim()) return "ERROR: session_name required"
     try {
-      const iteration = await getCurrentIteration()
+      const iteration = await getCurrentIteration(session)
       const meta = JSON.stringify({ action: "add", type: args.type, iteration })
+      const topic = `ralph.${session}.note`
       await withRetry(async () => {
-        await Bun.$`echo ${args.content} | xs append ${STORE_PATH} ralph.${SESSION_NAME}.note --meta ${meta}`
+        await Bun.$`echo ${args.content} | xs append ${STORE} ${topic} --meta ${meta}`
       })
       const preview = args.content.length > 50 ? args.content.slice(0, 50) + "..." : args.content
       return `Note added: [${args.type}] ${preview}`
     } catch (e) {
-      return `ERROR: Failed to add note: ${(e as Error).message}`
+      return `ERROR: ${(e as Error).message}`
     }
   },
 })
@@ -731,18 +709,21 @@ export const note_add = tool({
 export const note_list = tool({
   description: "List notes from this session",
   args: {
+    session_name: tool.schema.string().describe("Session name from Context section"),
     type: tool.schema.enum(["learning", "stuck", "tip", "decision"]).optional().describe("Filter by type"),
   },
   async execute(args) {
+    const session = args.session_name
+    if (!session?.trim()) return "ERROR: session_name required"
     const typeFilter = args.type ? `| where {|n| $n.type == "${args.type}"}` : ""
+    const topic = `ralph.${session}.note`
     const cmd = `
-      let topic = "ralph.${SESSION_NAME}.note"
-      xs cat ${STORE_PATH} | from json --objects | where topic == $topic | each {|f|
+      xs cat ${STORE} | from json --objects | where topic == "${topic}" | each {|f|
         {
           id: $f.id
           type: ($f.meta.type? | default "note")
           iteration: ($f.meta.iteration? | default null)
-          content: (xs cas ${STORE_PATH} $f.hash)
+          content: (xs cas ${STORE} $f.hash)
         }
       } ${typeFilter} | to json
     `
@@ -751,7 +732,6 @@ export const note_list = tool({
   },
 })
 '
-  )
   
   $content | save -f .opencode/tool/ralph.ts
 }
@@ -781,19 +761,20 @@ def build-prompt [
 ($state_text)
 
 ## Available Tools
-- task_add\(content, status?\) - Add new task
-- task_status\(id, status\) - Update task \(use IDs from list above\)
-- task_list\(\) - Refresh task list
+ALL tools require session_name=\"($name)\" as the first argument.
+- task_add\(session_name, content, status?\) - Add new task
+- task_status\(session_name, id, status\) - Update task \(use IDs from list above\)
+- task_list\(session_name\) - Refresh task list
 - session_complete\(session_name\) - Call when ALL tasks done
-- note_add\(content, type\) - Record learning/tip/blocker/decision for future iterations
-- note_list\(type?\) - View session notes
+- note_add\(session_name, content, type\) - Record learning/tip/blocker/decision for future iterations
+- note_list\(session_name, type?\) - View session notes
 
 ## Instructions
 1. Make sure ALL tasks from the spec appear in the task list. If some are missing add them.
 2. Pick ONE task from REMAINING or IN PROGRESS
-3. Call task_status\(id, \"in_progress\"\)
+3. Call task_status\(\"($name)\", id, \"in_progress\"\)
 4. Complete the work
-5. Call task_status\(id, \"completed\"\)
+5. Call task_status\(\"($name)\", id, \"completed\"\)
 6. Git commit with clear message
 7. If stuck or learned something important: call note_add\(\)
 8. If ALL tasks in the spec are done: call session_complete\(\"($name)\"\)
@@ -801,6 +782,7 @@ def build-prompt [
 ## Rules
 - ONE task per iteration
 - Run tests before commit
+- To end the session, call session_complete\(\"($name)\"\). Do NOT just print a message.
 "
   
   return $template
@@ -815,11 +797,12 @@ def main [
   --model (-m): string = "anthropic/claude-sonnet-4-5"      # Model to use
   --iterations (-i): int = 0                                # Number of iterations (0 = infinite)
   --port: int = 4096                                        # opencode serve port
-  --store: string = "./.ralph/store"                        # xs store path
   --ngrok: string = ""                                      # Enable ngrok tunnel with this password
   --ngrok-domain: string = ""                               # Custom ngrok domain (optional)
   --regen-tools                                             # Regenerate tool definitions (overwrites existing)
 ] {
+  # Store path is always relative to project root
+  let store = ".ralph/store"
   # Exit early if being sourced (not executed directly)
   # When sourced from tests, $env.CURRENT_FILE will be the test file, not ralph.nu
   let current_file = ($env.CURRENT_FILE? | default "")
@@ -913,7 +896,7 @@ def main [
       print $"(style header)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━(style reset)\n"
       
       # Generate custom tools (skip if already exist, unless --regen-tools on first iteration)
-      generate-tools $store $name $n --force=($regen_tools and $n == ($last_iter + 1))
+      generate-tools --force=($regen_tools and $n == ($last_iter + 1))
       
       # Get current task state for this iteration
       let task_state = (get-task-state $store $name)
@@ -927,7 +910,7 @@ def main [
       # Log iteration start
       log-iteration-start $store $name $n
       
-      # Run opencode attached to web server (output streams to terminal)
+      # Run opencode attached to web server
       opencode run --attach $web_result.url --title $"($name) - Iteration #($n)" -m $model $final_prompt
       
       # Determine status based on exit code
@@ -943,12 +926,13 @@ def main [
       }
       
       # Check for graceful shutdown signal (session_complete called by agent)
-      # Match on current iteration to avoid triggering on stale frames from previous runs
+      # Check for any session_complete frame created during this iteration (within last 5 minutes)
+      let cutoff = ((date now) - 5min | format date "%s" | into int) * 1000
       let shutdown = (xs cat $store 
         | from json --objects 
         | where topic == $"ralph.($name).control"
         | where {|f| $f.meta.action? == "session_complete" }
-        | where {|f| ($f.meta.iteration? | default 0) == $n }
+        | where {|f| ($f.meta.ts? | default 0) > $cutoff }
         | is-not-empty)
       
       if $shutdown {
