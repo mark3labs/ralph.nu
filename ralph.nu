@@ -950,6 +950,7 @@ def main [
         | where {|f| $f.meta.action? == "session_complete" }
         | where {|f| ($f.meta.iteration? | default 0) == $n }
         | is-not-empty)
+      
       if $shutdown {
         print-ok "Session complete - all tasks done"
         break
