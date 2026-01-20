@@ -763,8 +763,8 @@ ALL tools require session_name=\"($name)\" as the first argument.
   return $template
 }
 
-# Main entry point
-def main [
+# Main entry point - build subcommand runs the agent loop
+def "main build" [
   input?: string                                            # Optional piped input for prompt
   --name (-n): string = ""                                  # Session name (defaults to spec filename without extension)
   --prompt (-p): string                                     # Custom prompt
