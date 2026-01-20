@@ -797,6 +797,34 @@ def main [] {
   print ""
 }
 
+# Message subcommand - send message to running session
+def "main message" [
+  message: string           # Message to send
+  --name (-n): string       # Session name (required)
+] {
+  # Validate --name flag is provided
+  if ($name | is-empty) {
+    error make {msg: "--name flag is required"}
+  }
+  
+  # Store path is always relative to project root
+  let store = ".ralph/store"
+  
+  # Verify store is running
+  let check = (xs version $store | complete)
+  if $check.exit_code != 0 {
+    error make {msg: "Store not running. Is session active?"}
+  }
+  
+  # Append message to inbox topic with unread status
+  let topic = $"ralph.($name).inbox"
+  let timestamp = (date now | format date "%Y-%m-%dT%H:%M:%S%z")
+  let meta = {status: "unread", timestamp: $timestamp} | to json -r
+  
+  let result = (echo $message | xs append $store $topic --meta $meta)
+  print $"Message sent: ($result)"
+}
+
 # Main entry point - build subcommand runs the agent loop
 def "main build" [
   input?: string                                            # Optional piped input for prompt
