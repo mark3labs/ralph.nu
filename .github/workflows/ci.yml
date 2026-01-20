@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nushell
+        uses: hustcer/setup-nu@v3
+        with:
+          version: "*"
+
+      - name: Check syntax
+        run: |
+          nu -c 'ls **/*.nu | get name | each { |f| nu --commands $"source ($f)" }; print "Syntax check passed"'
+
+      # Tests require xs, opencode, and ngrok to be installed
+      # Run tests locally with: nu tests/run-all.nu
