@@ -66,6 +66,9 @@ To update to the latest version:
 # Explicit session name
 ./ralph.nu build --name my-feature --spec ./specs/auth-system.md
 
+# Add extra instructions to guide the agent
+./ralph.nu build --spec ./specs/my-feature.md -e "Focus on error handling first"
+
 # Limit iterations
 ./ralph.nu build --spec ./specs/my-feature.md --iterations 5
 
@@ -89,6 +92,7 @@ Run the AI agent loop.
 |------|---------|-------------|
 | `--name`, `-n` | spec filename | Session name |
 | `--spec`, `-s` | `./specs/SPEC.md` | Path to spec file |
+| `--extra-instructions`, `-e` | (none) | Extra instructions appended to prompt |
 | `--model`, `-m` | `anthropic/claude-sonnet-4-5` | Model to use |
 | `--iterations`, `-i` | `0` (infinite) | Max iterations |
 | `--port` | `4096` | Web UI port |
@@ -132,6 +136,23 @@ What the feature does.
 - [ ] Add API endpoints
 - [ ] Write tests
 ```
+
+## Customizing agent behavior
+
+Use `--extra-instructions` to add guidance without replacing the built-in prompt template:
+
+```bash
+# Prioritize certain work
+./ralph.nu build --spec ./specs/api.md -e "Focus on authentication endpoints first"
+
+# Add constraints
+./ralph.nu build --spec ./specs/refactor.md -e "Do not modify any public API signatures"
+
+# Specify coding style
+./ralph.nu build --spec ./specs/feature.md -e "Use functional style, avoid classes"
+```
+
+The extra instructions are appended under an "Additional Instructions" section, preserving all context (session info, task state, inbox, notes, tools, workflow).
 
 ## Testing
 

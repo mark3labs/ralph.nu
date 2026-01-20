@@ -905,11 +905,12 @@ export const inbox_mark_read = tool({
 
 # Build prompt template with task state injected
 def build-prompt [
-  spec_content: string  # Content of the spec file
-  store_path: string    # Path to the store directory
-  name: string          # Session name
-  iteration: int        # Current iteration number
-  task_state: record    # Current task state from get-task-state
+  spec_content: string        # Content of the spec file
+  store_path: string          # Path to the store directory
+  name: string                # Session name
+  iteration: int              # Current iteration number
+  task_state: record          # Current task state from get-task-state
+  extra_instructions?: string # Optional extra instructions to append
 ] {
   let state_text = (format-task-state $task_state)
   
@@ -926,7 +927,7 @@ def build-prompt [
   let notes_block = if ($notes_section | is-empty) { "" } else { $"\n($notes_section)\n" }
   
   let q = '"'  # quote char for embedding in template
-  $"## Context
+  let base_prompt = $"## Context
 Session: ($name) | Iteration: #($iteration)
 Spec: ($spec_content)
 ($inbox_block)($notes_block)
@@ -948,6 +949,13 @@ Spec: ($spec_content)
 6. When ALL done: session_complete\(($q)($name)($q)\)
 
 Rules: ONE task/iteration. Test before commit. Call session_complete to end - do NOT just print a message."
+  
+  # Append extra instructions if provided
+  if ($extra_instructions | default "" | is-not-empty) {
+    $"($base_prompt)\n\n## Additional Instructions\n($extra_instructions)"
+  } else {
+    $base_prompt
+  }
 }
 
 # Main entry point - shows usage info
@@ -976,6 +984,7 @@ def main [] {
   print $"(style section)BUILD OPTIONS(style reset)"
   print $"  (style label)--name, -n(style reset)           Session name \(defaults to spec filename\)"
   print $"  (style label)--spec, -s(style reset)           Spec file path \(default: ./specs/SPEC.md\)"
+  print $"  (style label)--extra-instructions, -e(style reset)  Extra instructions appended to prompt"
   print $"  (style label)--model, -m(style reset)          Model to use \(default: anthropic/claude-sonnet-4-5\)"
   print $"  (style label)--iterations, -i(style reset)     Number of iterations \(0 means infinite\)"
   print $"  (style label)--port(style reset)               opencode serve port \(default: 4096\)"
@@ -989,6 +998,9 @@ def main [] {
   print $"(style section)EXAMPLES(style reset)"
   print $"  (style dim)# Start agent with a spec(style reset)"
   print $"  ./ralph.nu build --spec ./specs/my-feature.md"
+  print ""
+  print $"  (style dim)# Add extra instructions to the agent(style reset)"
+  print "  ./ralph.nu build --spec ./specs/my-feature.md -e \"Focus on error handling first\""
   print ""
   print $"  (style dim)# Send message to running session(style reset)"
   print $"  ./ralph.nu message --name my-feature \"Please prioritize the login feature\""
@@ -1064,7 +1076,8 @@ def "main message" [
 def "main build" [
   input?: string                                            # Optional piped input for prompt
   --name (-n): string = ""                                  # Session name (defaults to spec filename without extension)
-  --prompt (-p): string                                     # Custom prompt
+  --prompt (-p): string                                     # Custom prompt (replaces entire template)
+  --extra-instructions (-e): string = ""                    # Extra instructions appended to prompt
   --spec (-s): string = "./specs/SPEC.md"                   # Spec file path
   --model (-m): string = "anthropic/claude-sonnet-4-5"      # Model to use
   --iterations (-i): int = 0                                # Number of iterations (0 = infinite)
@@ -1168,8 +1181,9 @@ def "main build" [
       # Get current task state for this iteration
       let task_state = (get-task-state $store $name)
       
-      # Build prompt for this iteration
-      let iteration_prompt = (build-prompt $spec_content $store $name $n $task_state)
+      # Build prompt for this iteration (with optional extra instructions)
+      let extra = if ($extra_instructions | is-not-empty) { $extra_instructions } else { null }
+      let iteration_prompt = (build-prompt $spec_content $store $name $n $task_state $extra)
       
       # Use base_prompt if set, otherwise use built template
       let final_prompt = if ($base_prompt | is-not-empty) { $base_prompt } else { $iteration_prompt }
