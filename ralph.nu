@@ -765,6 +765,83 @@ export const note_list = tool({
     return result.trim() || "No notes yet"
   },
 })
+
+export const inbox_list = tool({
+  description: "Get unread inbox messages. Check this at start of each iteration.",
+  args: {
+    session_name: tool.schema.string().describe("Session name from Context section"),
+  },
+  async execute(args) {
+    const session = args.session_name
+    if (!session?.trim()) return "ERROR: session_name required"
+    const topic = `ralph.${session}.inbox`
+    const cmd = `
+      let topic = "${topic}"
+      let frames = (xs cat ${STORE} | from json --objects | where topic == $topic)
+      
+      if ($frames | is-empty) {
+        "No unread messages"
+      } else {
+        let messages = ($frames | reduce -f {} {|frame, state|
+          let action = ($frame.meta.action? | default "add")
+          
+          if $action == "mark_read" {
+            let target_id = $frame.meta.id
+            let matching_id = ($state | columns | where {|id| $id == $target_id or ($id | str starts-with $target_id)} | first | default null)
+            if ($matching_id | is-not-empty) {
+              $state | upsert $matching_id {|m|
+                $m | get $matching_id | upsert status "read"
+              }
+            } else {
+              $state
+            }
+          } else if $action == "add" or ($frame.meta.status? == "unread") {
+            let content = (xs cas ${STORE} $frame.hash)
+            $state | upsert $frame.id {
+              id: $frame.id
+              content: $content
+              status: "unread"
+              timestamp: ($frame.meta.timestamp? | default "")
+            }
+          } else {
+            $state
+          }
+        })
+        
+        let unread = ($messages | values | where status == "unread")
+        if ($unread | is-empty) {
+          "No unread messages"
+        } else {
+          $unread | to json
+        }
+      }
+    `
+    const result = await Bun.$`nu -c ${cmd}`.text()
+    return result.trim() || "No unread messages"
+  },
+})
+
+export const inbox_mark_read = tool({
+  description: "Mark an inbox message as read after processing",
+  args: {
+    session_name: tool.schema.string().describe("Session name from Context section"),
+    id: tool.schema.string().describe("Message ID from inbox_list"),
+  },
+  async execute(args) {
+    const session = args.session_name
+    if (!session?.trim()) return "ERROR: session_name required"
+    const topic = `ralph.${session}.inbox`
+    try {
+      const meta = JSON.stringify({ action: "mark_read", id: args.id })
+      await withRetry(async () => {
+        await Bun.$`xs append ${STORE} ${topic} --meta ${meta}`.text()
+      })
+      return `Message ${args.id} marked as read`
+    } catch (e) {
+      return `ERROR: ${(e as Error).message}`
+    }
+  },
+})
 '
   
   $content | save -f .opencode/tool/ralph.ts
