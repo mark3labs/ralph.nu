@@ -3,26 +3,33 @@
 AI coding agent in a while loop. Named after Ralph Wiggum from The Simpsons.
 
 ```
-while :; do cat PROMPT.md | claude-code ; done
+while :; do cat PROMPT.md | opencode ; done
 ```
 
-This is a Nushell implementation with task tracking, iteration history, and a web UI.
+Nushell implementation with task tracking, iteration history, notes, inbox messaging, and a web UI.
+
+**This is a highly opinionated script. There are no plans to support other tools or features beyond what's already implemented.**
 
 ## How it works
 
 1. Reads a spec file describing what to build
 2. Spawns an AI agent (via opencode) to work on ONE task per iteration
-3. Tracks tasks and iterations in an append-only event store (xs)
+3. Tracks tasks, notes, and iterations in an append-only event store (xs)
 4. Loops until all tasks are complete or iteration limit reached
 5. Agent calls `session_complete()` when done
 
-The agent has tools to manage tasks: `task_add`, `task_status`, `task_list`, `session_complete`.
+Agent tools (auto-generated in `.opencode/tool/ralph.ts`):
+- `task_add`, `task_status`, `task_list` - task management
+- `note_add`, `note_list` - persist learnings/tips/blockers across iterations
+- `inbox_list`, `inbox_mark_read` - receive messages from external senders
+- `session_complete` - signal all tasks done
 
 ## Requirements
 
 - [nushell](https://www.nushell.sh/) - Shell
 - [xs](https://github.com/cablehead/xs) - Event store
 - [opencode](https://opencode.ai/) - AI coding agent
+- [bun](https://bun.sh/) - JavaScript runtime (for tool execution)
 
 Optional:
 - [ngrok](https://ngrok.com/) - Remote access tunnel
@@ -41,34 +48,49 @@ Create a spec file at `specs/SPEC.md` describing your feature with tasks.
 ## Usage
 
 ```bash
-# Basic usage
-./ralph.nu --name my-feature
+# Basic usage (session name derived from spec filename)
+./ralph.nu build --spec ./specs/my-feature.md
 
-# With custom spec file
-./ralph.nu --name my-feature --spec ./specs/auth-system.md
+# Explicit session name
+./ralph.nu build --name my-feature --spec ./specs/auth-system.md
 
 # Limit iterations
-./ralph.nu --name my-feature --iterations 5
+./ralph.nu build --spec ./specs/my-feature.md --iterations 5
 
 # Different model
-./ralph.nu --name my-feature --model anthropic/claude-sonnet-4-5
+./ralph.nu build --spec ./specs/my-feature.md --model anthropic/claude-sonnet-4-5
 
 # Enable remote access via ngrok
-./ralph.nu --name my-feature --ngrok "your-password-here"
+./ralph.nu build --spec ./specs/my-feature.md --ngrok "your-password-here"
+
+# Send message to running session
+./ralph.nu message --name my-feature "Please prioritize the login feature"
 ```
 
-## Options
+## Subcommands
+
+### `build`
+
+Run the AI agent loop.
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--name`, `-n` | (required) | Session name |
+| `--name`, `-n` | spec filename | Session name |
 | `--spec`, `-s` | `./specs/SPEC.md` | Path to spec file |
 | `--model`, `-m` | `anthropic/claude-sonnet-4-5` | Model to use |
 | `--iterations`, `-i` | `0` (infinite) | Max iterations |
 | `--port` | `4096` | Web UI port |
-| `--store` | `./.ralph/store` | Event store path |
 | `--ngrok` | (disabled) | ngrok password (8-128 chars) |
 | `--ngrok-domain` | (none) | Custom ngrok domain |
+| `--regen-tools` | false | Regenerate tool definitions |
+
+### `message`
+
+Send a message to a running session's inbox.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--name`, `-n` | (required) | Session name |
 
 ## Spec file format
 
@@ -84,21 +106,12 @@ What the feature does.
 
 ## Testing
 
-Run the test suite:
-
 ```bash
-# Run all tests
-nu tests/run-all.nu
-
-# Run individual test file
-nu tests/prompt-template.nu
+nu tests/run-all.nu        # Run all tests
+nu tests/prompt-template.nu # Run individual test file
 ```
 
-The test suite uses Nushell's `std/assert` module and includes:
-- Unit tests for core functions (prompt building, input handling, status display, etc.)
-- Integration tests for full workflow scenarios
-
-Test files follow the `def "test ..."` naming convention. See `tests/mod.nu` for test framework utilities.
+Test files use `def "test ..."` naming convention. See `tests/mod.nu` for framework utilities.
 
 ## Web UI
 
@@ -109,5 +122,7 @@ Access the opencode serve UI at `http://localhost:4096` (or your ngrok URL).
 Session data stored in `.ralph/store/`:
 - Task state (add/status events)
 - Iteration history (start/complete events)
+- Notes (learnings, tips, blockers, decisions)
+- Inbox messages
 
 Sessions can be resumed - ralph continues from the last iteration.
