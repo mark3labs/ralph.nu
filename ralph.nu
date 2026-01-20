@@ -763,6 +763,40 @@ ALL tools require session_name=\"($name)\" as the first argument.
   return $template
 }
 
+# Main entry point - shows usage info
+def main [] {
+  print-banner
+  print ""
+  print $"(style section)USAGE(style reset)"
+  print $"  (style value)./ralph.nu build(style reset) (style dim)[OPTIONS](style reset)"
+  print $"  (style value)./ralph.nu message(style reset) (style dim)--name <session> <message>(style reset)"
+  print ""
+  print $"(style section)SUBCOMMANDS(style reset)"
+  print $"  (style value)build(style reset)    Run the AI agent loop"
+  print $"  (style value)message(style reset)  Send a message to a running session"
+  print ""
+  print $"(style section)BUILD OPTIONS(style reset)"
+  print $"  (style label)--name, -n(style reset)           Session name \(defaults to spec filename\)"
+  print $"  (style label)--spec, -s(style reset)           Spec file path \(default: ./specs/SPEC.md\)"
+  print $"  (style label)--model, -m(style reset)          Model to use \(default: anthropic/claude-sonnet-4-5\)"
+  print $"  (style label)--iterations, -i(style reset)     Number of iterations \(0 means infinite\)"
+  print $"  (style label)--port(style reset)               opencode serve port \(default: 4096\)"
+  print $"  (style label)--ngrok(style reset)              Enable ngrok tunnel with password"
+  print $"  (style label)--ngrok-domain(style reset)       Custom ngrok domain \(optional\)"
+  print $"  (style label)--regen-tools(style reset)        Regenerate tool definitions"
+  print ""
+  print $"(style section)MESSAGE OPTIONS(style reset)"
+  print $"  (style label)--name, -n(style reset)           Session name \(required\)"
+  print ""
+  print $"(style section)EXAMPLES(style reset)"
+  print $"  (style dim)# Start agent with a spec(style reset)"
+  print $"  ./ralph.nu build --spec ./specs/my-feature.md"
+  print ""
+  print $"  (style dim)# Send message to running session(style reset)"
+  print $"  ./ralph.nu message --name my-feature \"Please prioritize the login feature\""
+  print ""
+}
+
 # Main entry point - build subcommand runs the agent loop
 def "main build" [
   input?: string                                            # Optional piped input for prompt
