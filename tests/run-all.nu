@@ -14,6 +14,7 @@ def main [] {
     "web-server-start.nu"
     "iteration-logging.nu"
     "notes.nu"
+    "message-flow.nu"
   ]
   
   print $"(ansi blue)Running all tests...(ansi reset)"
