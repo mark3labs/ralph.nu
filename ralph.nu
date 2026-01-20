@@ -911,6 +911,13 @@ ALL tools require session_name=\"($name)\" as the first argument.
 
 # Main entry point - shows usage info
 def main [] {
+  # Exit early if being sourced (not executed directly)
+  # When sourced from tests, $env.CURRENT_FILE will be the test file, not ralph.nu
+  let current_file = ($env.CURRENT_FILE? | default "")
+  if ($current_file | str contains "tests/") {
+    return
+  }
+
   print-banner
   print ""
   print $"(style section)USAGE(style reset)"
@@ -986,12 +993,6 @@ def "main build" [
 ] {
   # Store path is always relative to project root
   let store = ".ralph/store"
-  # Exit early if being sourced (not executed directly)
-  # When sourced from tests, $env.CURRENT_FILE will be the test file, not ralph.nu
-  let current_file = ($env.CURRENT_FILE? | default "")
-  if ($current_file | str contains "tests/") {
-    return
-  }
   
   # Derive name from spec filename if not provided
   let name = if ($name | is-empty) {
