@@ -4,11 +4,18 @@
 
 Add `ralph.nu message` subcommand to send messages to a running ralph session's inbox. Agent checks inbox at loop start, processes messages, marks as read.
 
+Also restructure CLI: `main` shows usage only (no side effects), `main build` runs the agent loop.
+
 ## User Story
 
 User wants to communicate with running agent mid-session. Send guidance, corrections, or new info without restarting. Agent sees messages immediately at next iteration start.
 
 ## Requirements
+
+### CLI Structure Change
+- `./ralph.nu` (bare) - Shows usage/help only. No cleanup_all, no kill servers, no side effects.
+- `./ralph.nu build [flags]` - Runs agent loop (current `main` behavior: cleanup, start servers, iterate)
+- All existing flags (`--name`, `--spec`, `--model`, etc.) move to `main build`
 
 ### CLI Interface
 - `ralph.nu message --name <session> <message>`
@@ -174,38 +181,44 @@ Update instructions:
 
 ## Tasks
 
-### 1. Add message subcommand
+### 1. Restructure CLI commands
+- [ ] Rename `def main` to `def "main build"` (keeps all existing flags/logic)
+- [ ] Create new `def main` that only shows usage (print-banner + help text, no side effects)
+- [ ] Verify `./ralph.nu` shows help without triggering cleanup_all or kill-existing
+- [ ] Verify `./ralph.nu build --spec ./specs/foo.md` runs agent loop as before
+
+### 2. Add message subcommand
 - [ ] Add `def "main message"` function
 - [ ] Validate --name flag required
 - [ ] Check store is running
 - [ ] Append message to .inbox topic with unread status
 
-### 2. Implement inbox state functions
+### 3. Implement inbox state functions
 - [ ] Add `get-inbox-state` function (reduce pattern)
 - [ ] Add `format-inbox-for-prompt` function
 - [ ] Filter to only return unread messages
 
-### 3. Add inbox_list tool
+### 4. Add inbox_list tool
 - [ ] Args: session_name
 - [ ] Return unread messages with IDs
 - [ ] Use reduce pattern for state computation
 
-### 4. Add inbox_mark_read tool
+### 5. Add inbox_mark_read tool
 - [ ] Args: session_name, id
 - [ ] Append mark_read action frame
 - [ ] Return confirmation
 
-### 5. Update build-prompt function
+### 6. Update build-prompt function
 - [ ] Get inbox state at iteration start
 - [ ] Inject inbox section before task state
 - [ ] Only show unread messages
 
-### 6. Update prompt template instructions
+### 7. Update prompt template instructions
 - [ ] Add "check inbox first" instruction
 - [ ] Document inbox_list and inbox_mark_read tools
 - [ ] Emphasize processing messages before tasks
 
-### 7. Test message flow
+### 8. Test message flow
 - [ ] Send message to running session
 - [ ] Verify message appears in agent prompt
 - [ ] Verify mark_read removes from unread list
@@ -214,6 +227,12 @@ Update instructions:
 
 CLI usage:
 ```
+$ ./ralph.nu
+# Shows usage/help only, no side effects
+
+$ ./ralph.nu build --spec ./specs/my-feature.md
+# Starts agent loop (current behavior)
+
 $ ralph.nu message --name my-session "Please prioritize the login feature"
 Message sent: 01jf...
 
