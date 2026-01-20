@@ -54,6 +54,60 @@ def print-section [title: string] {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Requirements checking
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Check if a command exists
+def cmd-exists [cmd: string] {
+  (which $cmd | is-not-empty)
+}
+
+# Check required tools, returns list of missing tools
+def check-requirements [
+  --include-ngrok  # Also check for ngrok
+] {
+  let required = ["xs", "opencode", "bun"]
+  let optional = if $include_ngrok { ["ngrok"] } else { [] }
+  let all_tools = ($required | append $optional)
+  
+  $all_tools | where {|cmd| not (cmd-exists $cmd) }
+}
+
+# Run doctor checks and print status for each tool
+def run-doctor [
+  --include-ngrok  # Also check for ngrok
+] {
+  let tools = [
+    {name: "xs", desc: "Event store", url: "https://github.com/cablehead/xs"}
+    {name: "opencode", desc: "AI coding agent", url: "https://opencode.ai"}
+    {name: "bun", desc: "JavaScript runtime", url: "https://bun.sh"}
+  ]
+  
+  let tools = if $include_ngrok {
+    $tools | append {name: "ngrok", desc: "Remote tunnel (optional)", url: "https://ngrok.com"}
+  } else {
+    $tools
+  }
+  
+  mut all_ok = true
+  
+  for tool in $tools {
+    if (cmd-exists $tool.name) {
+      let version = try {
+        run-external $tool.name "--version" | complete | get stdout | str trim | split row "\n" | first
+      } catch { "unknown" }
+      print-ok $"($tool.name) ($version)"
+    } else {
+      print-err $"($tool.name) not found - ($tool.desc)"
+      print $"     (style url)($tool.url)(style reset)"
+      $all_ok = false
+    }
+  }
+  
+  $all_ok
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Kill processes matching a pattern (helper to reduce duplication)
 def kill-matching [
@@ -908,11 +962,13 @@ def main [] {
   print $"(style section)USAGE(style reset)"
   print $"  (style value)./ralph.nu build(style reset) (style dim)[OPTIONS](style reset)"
   print $"  (style value)./ralph.nu message(style reset) (style dim)--name <session> <message>(style reset)"
+  print $"  (style value)./ralph.nu doctor(style reset) (style dim)[--ngrok](style reset)"
   print $"  (style value)./ralph.nu update(style reset)"
   print ""
   print $"(style section)SUBCOMMANDS(style reset)"
   print $"  (style value)build(style reset)    Run the AI agent loop"
   print $"  (style value)message(style reset)  Send a message to a running session"
+  print $"  (style value)doctor(style reset)   Check required dependencies"
   print $"  (style value)update(style reset)   Update ralph.nu to latest version from GitHub"
   print ""
   print $"(style section)BUILD OPTIONS(style reset)"
@@ -935,6 +991,26 @@ def main [] {
   print $"  (style dim)# Send message to running session(style reset)"
   print $"  ./ralph.nu message --name my-feature \"Please prioritize the login feature\""
   print ""
+}
+
+# Doctor subcommand - check required dependencies
+def "main doctor" [
+  --ngrok  # Also check for ngrok
+] {
+  print-banner
+  print ""
+  print $"(style section)Checking dependencies...(style reset)"
+  print ""
+  
+  let all_ok = (run-doctor --include-ngrok=$ngrok)
+  
+  print ""
+  if $all_ok {
+    print-ok "All dependencies installed"
+  } else {
+    print-err "Some dependencies missing"
+    exit 1
+  }
 }
 
 # Update subcommand - fetch latest version from GitHub
@@ -995,6 +1071,15 @@ def "main build" [
   --ngrok-domain: string = ""                               # Custom ngrok domain (optional)
   --regen-tools                                             # Regenerate tool definitions (overwrites existing)
 ] {
+  # Check required tools before doing anything
+  let include_ngrok = ($ngrok | is-not-empty)
+  let missing = (check-requirements --include-ngrok=$include_ngrok)
+  if ($missing | is-not-empty) {
+    print-err $"Missing required tools: ($missing | str join ', ')"
+    print $"  (style dim)Run './ralph.nu doctor' for details(style reset)"
+    exit 1
+  }
+  
   # Store path is always relative to project root
   let store = ".ralph/store"
   

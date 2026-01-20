@@ -98,6 +98,15 @@ Send a message to a running session's inbox.
 |------|---------|-------------|
 | `--name`, `-n` | (required) | Session name |
 
+### `doctor`
+
+Check that required dependencies are installed.
+
+```bash
+./ralph.nu doctor          # Check required tools (xs, opencode, bun)
+./ralph.nu doctor --ngrok  # Also check for ngrok
+```
+
 ### `update`
 
 Update `ralph.nu` to the latest version from GitHub.
