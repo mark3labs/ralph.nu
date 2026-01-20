@@ -39,11 +39,17 @@ Optional:
 Copy `ralph.nu` into your repo:
 
 ```bash
-curl -o ralph.nu https://raw.githubusercontent.com/anthropics/ralph.nu/main/ralph.nu
+curl -o ralph.nu https://raw.githubusercontent.com/mark3labs/ralph.nu/main/ralph.nu
 chmod +x ralph.nu
 ```
 
 Create a spec file at `specs/SPEC.md` describing your feature with tasks.
+
+To update to the latest version:
+
+```bash
+./ralph.nu update
+```
 
 ## Usage
 
@@ -91,6 +97,14 @@ Send a message to a running session's inbox.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--name`, `-n` | (required) | Session name |
+
+### `update`
+
+Update `ralph.nu` to the latest version from GitHub.
+
+```bash
+./ralph.nu update
+```
 
 ## Spec file format
 

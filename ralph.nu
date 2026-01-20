@@ -908,10 +908,12 @@ def main [] {
   print $"(style section)USAGE(style reset)"
   print $"  (style value)./ralph.nu build(style reset) (style dim)[OPTIONS](style reset)"
   print $"  (style value)./ralph.nu message(style reset) (style dim)--name <session> <message>(style reset)"
+  print $"  (style value)./ralph.nu update(style reset)"
   print ""
   print $"(style section)SUBCOMMANDS(style reset)"
   print $"  (style value)build(style reset)    Run the AI agent loop"
   print $"  (style value)message(style reset)  Send a message to a running session"
+  print $"  (style value)update(style reset)   Update ralph.nu to latest version from GitHub"
   print ""
   print $"(style section)BUILD OPTIONS(style reset)"
   print $"  (style label)--name, -n(style reset)           Session name \(defaults to spec filename\)"
@@ -933,6 +935,23 @@ def main [] {
   print $"  (style dim)# Send message to running session(style reset)"
   print $"  ./ralph.nu message --name my-feature \"Please prioritize the login feature\""
   print ""
+}
+
+# Update subcommand - fetch latest version from GitHub
+def "main update" [] {
+  let url = "https://raw.githubusercontent.com/mark3labs/ralph.nu/refs/heads/main/ralph.nu"
+  let script_path = ($env.CURRENT_FILE? | default "./ralph.nu")
+  
+  print-status $"Fetching latest version from GitHub..."
+  
+  try {
+    http get $url | save -f $script_path
+    chmod +x $script_path
+    print-ok $"Updated ($script_path)"
+  } catch { |err|
+    print-err $"Failed to update: ($err.msg)"
+    error make {msg: $err.msg}
+  }
 }
 
 # Message subcommand - send message to running session
