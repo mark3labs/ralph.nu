@@ -43,6 +43,12 @@ curl -o ralph.nu https://raw.githubusercontent.com/mark3labs/ralph.nu/main/ralph
 chmod +x ralph.nu
 ```
 
+Verify dependencies are installed:
+
+```bash
+./ralph.nu doctor
+```
+
 Create a spec file at `specs/SPEC.md` describing your feature with tasks.
 
 To update to the latest version:
