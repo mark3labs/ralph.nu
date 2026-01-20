@@ -94,7 +94,9 @@ def run-doctor [
   for tool in $tools {
     if (cmd-exists $tool.name) {
       let version = try {
-        run-external $tool.name "--version" | complete | get stdout | str trim | split row "\n" | first
+        let raw = (run-external $tool.name "--version" | complete | get stdout | str trim | split row "\n" | first)
+        # Strip leading tool name and "version" word if present (e.g., "ngrok version 3.31.0" -> "3.31.0")
+        $raw | str replace -r '^[\w-]+ +(version +)?' ''
       } catch { "unknown" }
       print-ok $"($tool.name) ($version)"
     } else {
