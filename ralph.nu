@@ -1029,7 +1029,7 @@ def "main doctor" [
 
 # Update subcommand - fetch latest version from GitHub
 def "main update" [] {
-  let url = "https://raw.githubusercontent.com/mark3labs/ralph.nu/refs/heads/main/ralph.nu"
+  let url = "https://raw.githubusercontent.com/mark3labs/ralph.nu/refs/heads/master/ralph.nu"
   let script_path = ($env.CURRENT_FILE? | default "./ralph.nu")
   
   print-status $"Fetching latest version from GitHub..."
