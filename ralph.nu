@@ -857,6 +857,10 @@ def build-prompt [
 ] {
   let state_text = (format-task-state $task_state)
   
+  # Get inbox state and format for prompt
+  let inbox_messages = (get-inbox-state $store_path $name)
+  let inbox_section = (format-inbox-for-prompt $inbox_messages)
+  
   # Get notes and format for prompt
   let notes = (get-note-state $store_path $name)
   let notes_section = (format-notes-for-prompt $notes $iteration)
@@ -866,6 +870,8 @@ def build-prompt [
 - Spec: ($spec_content)
 - Iteration: #($iteration)
 
+($inbox_section)
+
 ($notes_section)
 
 ## Current Task State
@@ -873,6 +879,8 @@ def build-prompt [
 
 ## Available Tools
 ALL tools require session_name=\"($name)\" as the first argument.
+- inbox_list\(session_name\) - Get unread inbox messages. Check this at start of each iteration.
+- inbox_mark_read\(session_name, id\) - Mark an inbox message as read after processing
 - task_add\(session_name, content, status?\) - Add new task
 - task_status\(session_name, id, status\) - Update task \(use IDs from list above\)
 - task_list\(session_name\) - Refresh task list
@@ -881,14 +889,16 @@ ALL tools require session_name=\"($name)\" as the first argument.
 - note_list\(session_name, type?\) - View session notes
 
 ## Instructions
-1. Make sure ALL tasks from the spec appear in the task list. If some are missing add them.
-2. Pick ONE task from REMAINING or IN PROGRESS
-3. Call task_status\(\"($name)\", id, \"in_progress\"\)
-4. Complete the work
-5. Call task_status\(\"($name)\", id, \"completed\"\)
-6. Git commit with clear message
-7. If stuck or learned something important: call note_add\(\)
-8. If ALL tasks in the spec are done: call session_complete\(\"($name)\"\)
+1. Check inbox for messages - process any unread messages first
+2. Mark processed messages as read with inbox_mark_read\(\)
+3. Make sure ALL tasks from the spec appear in the task list. If some are missing add them.
+4. Pick ONE task from REMAINING or IN PROGRESS
+5. Call task_status\(\"($name)\", id, \"in_progress\"\)
+6. Complete the work
+7. Call task_status\(\"($name)\", id, \"completed\"\)
+8. Git commit with clear message
+9. If stuck or learned something important: call note_add\(\)
+10. If ALL tasks in the spec are done: call session_complete\(\"($name)\"\)
 
 ## Rules
 - ONE task per iteration
