@@ -766,7 +766,7 @@ ALL tools require session_name=\"($name)\" as the first argument.
 # Main entry point
 def main [
   input?: string                                            # Optional piped input for prompt
-  --name (-n): string = ""                                  # REQUIRED - name for this ralph session
+  --name (-n): string = ""                                  # Session name (defaults to spec filename without extension)
   --prompt (-p): string                                     # Custom prompt
   --spec (-s): string = "./specs/SPEC.md"                   # Spec file path
   --model (-m): string = "anthropic/claude-sonnet-4-5"      # Model to use
@@ -785,11 +785,11 @@ def main [
     return
   }
   
-  # Validate required parameter
-  if ($name | is-empty) {
-    print-err "Missing required parameter: --name (-n)"
-    print $"  (style dim)Usage: ralph.nu --name <session-name> [--spec <path>] [--iterations <n>](style reset)"
-    exit 1
+  # Derive name from spec filename if not provided
+  let name = if ($name | is-empty) {
+    $spec | path basename | path parse | get stem
+  } else {
+    $name
   }
 
   print-banner
