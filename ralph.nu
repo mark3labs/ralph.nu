@@ -309,6 +309,65 @@ def get-note-state [
   }
 }
 
+# Get inbox state (unread messages) from append-only log using reduce pattern
+# Events: add (creates message with unread status), mark_read (changes status by ID)
+def get-inbox-state [
+  store_path: string  # Path to the store directory
+  name: string        # Session name
+] {
+  let topic = $"ralph.($name).inbox"
+  let frames = (xs cat $store_path | from json --objects | where topic == $topic)
+  
+  if ($frames | is-empty) { return [] }
+  
+  # Use reduce to build state machine - messages keyed by ID
+  let messages = ($frames | reduce -f {} {|frame, state|
+    let action = ($frame.meta.action? | default "add")
+    
+    if $action == "mark_read" {
+      # Status change: mark existing message as read by ID (supports prefix matching)
+      let target_id = $frame.meta.id
+      # Find message by exact match or prefix (8+ chars)
+      let matching_id = ($state | columns | where {|id| $id == $target_id or ($id | str starts-with $target_id)} | first | default null)
+      if ($matching_id | is-not-empty) {
+        $state | upsert $matching_id {|m|
+          $m | get $matching_id | upsert status "read"
+        }
+      } else {
+        $state
+      }
+    } else if $action == "add" or ($frame.meta.status? == "unread") {
+      # New message: store content and status
+      let content = (xs cas $store_path $frame.hash)
+      $state | upsert $frame.id {
+        id: $frame.id
+        content: $content
+        status: "unread"
+        timestamp: ($frame.meta.timestamp? | default "")
+      }
+    } else {
+      $state
+    }
+  })
+  
+  # Return only unread messages
+  $messages | values | where status == "unread"
+}
+
+# Format inbox messages for prompt injection
+def format-inbox-for-prompt [messages: list] {
+  if ($messages | is-empty) { return "" }
+  
+  mut lines = ["## INBOX (Unread Messages - Process these first!)"]
+  for msg in $messages {
+    let id_short = ($msg.id | str substring 0..8)
+    $lines = ($lines | append $"- [($id_short)] ($msg.timestamp): ($msg.content)")
+  }
+  $lines = ($lines | append "")
+  $lines = ($lines | append "After reading, call inbox_mark_read(session_name, id) for each message.")
+  $lines | str join "\n"
+}
+
 # Note type ordering and colors
 const NOTE_TYPES = ["stuck", "learning", "tip", "decision"]
 const NOTE_COLORS = {stuck: "red", learning: "green", tip: "cyan", decision: "yellow"}
