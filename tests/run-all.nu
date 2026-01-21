@@ -16,6 +16,7 @@ def main [] {
     "notes.nu"
     "message-flow.nu"
     "extra-instructions.nu"
+    "template.nu"
   ]
   
   print $"(ansi blue)Running all tests...(ansi reset)"
