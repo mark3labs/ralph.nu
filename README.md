@@ -92,6 +92,7 @@ Run the AI agent loop.
 |------|---------|-------------|
 | `--name`, `-n` | spec filename | Session name |
 | `--spec`, `-s` | `./specs/SPEC.md` | Path to spec file |
+| `--template`, `-t` | `.ralph.template` if exists | Custom template file |
 | `--extra-instructions`, `-e` | (none) | Extra instructions appended to prompt |
 | `--model`, `-m` | `anthropic/claude-sonnet-4-5` | Model to use |
 | `--iterations`, `-i` | `0` (infinite) | Max iterations |
@@ -125,6 +126,15 @@ Update `ralph.nu` to the latest version from GitHub.
 ./ralph.nu update
 ```
 
+### `gen-template`
+
+Export the default prompt template for customization.
+
+```bash
+./ralph.nu gen-template                    # Writes to .ralph.template
+./ralph.nu gen-template --output my.template  # Custom output path
+```
+
 ## Spec file format
 
 ```markdown
@@ -153,6 +163,63 @@ Use `--extra-instructions` to add guidance without replacing the built-in prompt
 ```
 
 The extra instructions are appended under an "Additional Instructions" section, preserving all context (session info, task state, inbox, notes, tools, workflow).
+
+## Custom prompt templates
+
+For deeper customization, you can create a custom prompt template:
+
+```bash
+# Export default template
+./ralph.nu gen-template
+
+# Edit .ralph.template with your changes
+# Template uses {{variable}} placeholders
+
+# ralph automatically uses .ralph.template if it exists
+./ralph.nu build --spec ./specs/my-feature.md
+
+# Or specify explicit template path
+./ralph.nu build --spec ./specs/my-feature.md --template ./my-custom.template
+```
+
+### Template variables
+
+Templates use `{{variable}}` syntax:
+
+| Variable | Description |
+|----------|-------------|
+| `{{session}}` | Session name |
+| `{{iteration}}` | Current iteration number |
+| `{{spec}}` | Full spec file content |
+| `{{inbox}}` | Formatted inbox section (empty if none) |
+| `{{notes}}` | Formatted notes section (empty if none) |
+| `{{tasks}}` | Formatted task state |
+| `{{extra}}` | Extra instructions from `--extra-instructions` flag |
+
+### Template resolution priority
+
+1. `--template <path>` flag (explicit path)
+2. `.ralph.template` in project root (default custom location)
+3. Hardcoded template in `ralph.nu` (fallback)
+
+Example custom template:
+
+```
+# Agent Instructions
+
+Session: {{session}} (Iteration {{iteration}})
+
+## Task
+{{spec}}
+
+## Current State
+{{tasks}}
+
+{{inbox}}{{notes}}
+
+Focus on one task at a time. Test before committing.
+{{extra}}
+```
 
 ## Testing
 
