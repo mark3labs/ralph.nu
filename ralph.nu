@@ -1107,6 +1107,14 @@ def "main update" [] {
   }
 }
 
+# gen-template subcommand - write default prompt template to file
+def "main gen-template" [
+  --output (-o): string = ".ralph.template"  # Output file path
+] {
+  $DEFAULT_TEMPLATE | save -f $output
+  print-ok $"Template written to ($output)"
+}
+
 # Message subcommand - send message to running session
 def "main message" [
   message: string           # Message to send
