@@ -974,6 +974,7 @@ def build-prompt [
   iteration: int              # Current iteration number
   task_state: record          # Current task state from get-task-state
   extra_instructions?: string # Optional extra instructions to append
+  template?: string           # Optional template content (uses DEFAULT_TEMPLATE if not provided)
 ] {
   let state_text = (format-task-state $task_state)
   
@@ -988,36 +989,22 @@ def build-prompt [
   # Build optional sections only when they have content
   let inbox_block = if ($inbox_section | is-empty) { "" } else { $"\n($inbox_section)\n" }
   let notes_block = if ($notes_section | is-empty) { "" } else { $"\n($notes_section)\n" }
+  let extra_block = if ($extra_instructions | default "" | is-not-empty) {
+    $"\n\n## Additional Instructions\n($extra_instructions)"
+  } else { "" }
   
-  let q = '"'  # quote char for embedding in template
-  let base_prompt = $"## Context
-Session: ($name) | Iteration: #($iteration)
-Spec: ($spec_content)
-($inbox_block)($notes_block)
-## Task State
-($state_text)
-
-## Tools - all require session_name=($q)($name)($q)
-- inbox_list / inbox_mark_read\(id\) - check/ack messages
-- task_add\(content, status?\) / task_status\(id, status\) / task_list - manage tasks
-- note_add\(content, type\) / note_list\(type?\) - record learnings/tips/blockers/decisions
-- session_complete - call when ALL tasks done
-
-## Workflow
-1. Check inbox, mark read after processing
-2. Ensure all spec tasks exist in task list
-3. Pick ONE task, mark in_progress, do work, mark completed
-4. Run tests, commit with clear message
-5. If stuck/learned something: note_add
-6. When ALL done: session_complete\(($q)($name)($q)\)
-
-Rules: ONE task/iteration. Test before commit. Call session_complete to end - do NOT just print a message."
+  # Use provided template or default
+  let template_content = $template | default $DEFAULT_TEMPLATE
   
-  # Append extra instructions if provided
-  if ($extra_instructions | default "" | is-not-empty) {
-    $"($base_prompt)\n\n## Additional Instructions\n($extra_instructions)"
-  } else {
-    $base_prompt
+  # Apply template with variable substitution
+  apply-template $template_content {
+    session: $name
+    iteration: $iteration
+    spec: $spec_content
+    inbox: $inbox_block
+    notes: $notes_block
+    tasks: $state_text
+    extra: $extra_block
   }
 }
 
