@@ -1137,6 +1137,7 @@ def "main build" [
   --prompt (-p): string                                     # Custom prompt (replaces entire template)
   --extra-instructions (-e): string = ""                    # Extra instructions appended to prompt
   --spec (-s): string = "./specs/SPEC.md"                   # Spec file path
+  --template (-t): string = ""                              # Custom template file path
   --model (-m): string = "anthropic/claude-sonnet-4-5"      # Model to use
   --iterations (-i): int = 0                                # Number of iterations (0 = infinite)
   --port: int = 4096                                        # opencode serve port
@@ -1201,6 +1202,13 @@ def "main build" [
     print-kv "Spec" $spec
     let spec_content = (open $spec)
     
+    # Resolve template once at start (only if no --prompt override)
+    let template_content = if ($template | is-not-empty) {
+      resolve-template $template
+    } else {
+      resolve-template
+    }
+    
     # Determine base prompt (priority: --prompt > piped input > default template)
     let base_prompt = if ($prompt | is-not-empty) {
       $prompt
@@ -1239,9 +1247,9 @@ def "main build" [
       # Get current task state for this iteration
       let task_state = (get-task-state $store $name)
       
-      # Build prompt for this iteration (with optional extra instructions)
+      # Build prompt for this iteration (with optional extra instructions and template)
       let extra = if ($extra_instructions | is-not-empty) { $extra_instructions } else { null }
-      let iteration_prompt = (build-prompt $spec_content $store $name $n $task_state $extra)
+      let iteration_prompt = (build-prompt $spec_content $store $name $n $task_state $extra $template_content)
       
       # Use base_prompt if set, otherwise use built template
       let final_prompt = if ($base_prompt | is-not-empty) { $base_prompt } else { $iteration_prompt }
