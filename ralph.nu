@@ -47,6 +47,24 @@ def apply-template [
     | str replace --all "{{extra}}" $vars.extra
 }
 
+# Resolve template: --template flag > .ralph.template > hardcoded default
+def resolve-template [
+  template_flag?: string  # Explicit --template path
+] {
+  if ($template_flag | is-not-empty) {
+    if not ($template_flag | path exists) {
+      error make {msg: $"Template file not found: ($template_flag)"}
+    }
+    return (open $template_flag)
+  }
+  
+  if ($DEFAULT_TEMPLATE_PATH | path exists) {
+    return (open $DEFAULT_TEMPLATE_PATH)
+  }
+  
+  $DEFAULT_TEMPLATE
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Styling helpers - consistent colored output throughout the script
 # ─────────────────────────────────────────────────────────────────────────────
