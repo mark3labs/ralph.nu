@@ -9,3 +9,4 @@
 | [test-refactor.md](test-refactor.md) | Pending | Refactor tests to use std/assert and test function pattern |
 | [iteration-notes.md](iteration-notes.md) | Pending | Cross-iteration memory for learnings, tips, blockers |
 | [message-subcommand.md](message-subcommand.md) | Pending | Send messages to running agent via inbox |
+| [custom-prompt-template.md](custom-prompt-template.md) | Pending | Custom prompt templates with gen-template subcommand |
