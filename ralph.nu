@@ -32,6 +32,21 @@ Spec: {{spec}}
 Rules: ONE task/iteration. Test before commit. Call session_complete to end - do NOT just print a message.
 {{extra}}'
 
+# Substitute {{variable}} placeholders in template
+def apply-template [
+  template: string
+  vars: record  # {session, iteration, spec, inbox, notes, tasks, extra}
+] {
+  $template
+    | str replace --all "{{session}}" $vars.session
+    | str replace --all "{{iteration}}" ($vars.iteration | into string)
+    | str replace --all "{{spec}}" $vars.spec
+    | str replace --all "{{inbox}}" $vars.inbox
+    | str replace --all "{{notes}}" $vars.notes
+    | str replace --all "{{tasks}}" $vars.tasks
+    | str replace --all "{{extra}}" $vars.extra
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Styling helpers - consistent colored output throughout the script
 # ─────────────────────────────────────────────────────────────────────────────
